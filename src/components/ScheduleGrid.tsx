@@ -37,35 +37,71 @@ export function ScheduleGrid({
     const rect = element.getBoundingClientRect();
     const offsetY = event.clientY - rect.top;
     
-    setDragSession({ session, offsetY });
-    event.dataTransfer.setData('text/plain', session.id); // Required for Firefox
+    console.log('Drag Start:', {
+      sessionId: session.id,
+      currentPoolDayId: session.poolDayId,
+      offsetY,
+      sessionTime: `${session.start}-${session.end}`
+    });
     
-    // Create a semi-transparent drag image
-    const dragImage = element.cloneNode(true) as HTMLElement;
-    dragImage.style.opacity = '0.5';
-    dragImage.style.position = 'absolute';
-    dragImage.style.top = '-1000px';
-    document.body.appendChild(dragImage);
-    event.dataTransfer.setDragImage(dragImage, 0, offsetY);
-    setTimeout(() => document.body.removeChild(dragImage), 0);
+    setDragSession({ session, offsetY });
+    
+    // Store drag session data in dataTransfer
+    event.dataTransfer.setData('application/json', JSON.stringify({ 
+      sessionId: session.id,
+      offsetY,
+      start: session.start,
+      end: session.end
+    }));
   };
 
   const handleDragOver = (event: React.DragEvent, poolDayId: string) => {
     event.preventDefault();
+    console.log('Drag Over:', {
+      poolDayId,
+      clientY: event.clientY,
+      dragSession: dragSession?.session.id
+    });
     event.dataTransfer.dropEffect = 'move';
   };
 
   const handleDrop = (event: React.DragEvent, poolDayId: string) => {
     event.preventDefault();
     
-    if (!dragSession || !gridRef.current) return;
+    // Try to get drag data from dataTransfer if dragSession is lost
+    let activeDragSession = dragSession;
+    if (!activeDragSession) {
+      try {
+        const dragData = JSON.parse(event.dataTransfer.getData('application/json'));
+        const session = sessions.find(s => s.id === dragData.sessionId);
+        if (session) {
+          activeDragSession = { session, offsetY: dragData.offsetY };
+        }
+      } catch (e) {
+        console.log('Drop failed:', { reason: 'Could not restore drag session' });
+        return;
+      }
+    }
+    
+    if (!activeDragSession || !gridRef.current) {
+      console.log('Drop failed:', { reason: !activeDragSession ? 'No drag session' : 'No grid ref' });
+      return;
+    }
     
     const gridRect = gridRef.current.getBoundingClientRect();
-    const relativeY = event.clientY - gridRect.top - dragSession.offsetY;
+    const relativeY = event.clientY - gridRect.top - activeDragSession.offsetY;
+    
+    console.log('Drop Calculations:', {
+      gridTop: gridRect.top,
+      clientY: event.clientY,
+      offsetY: activeDragSession.offsetY,
+      relativeY,
+      gridHeight: gridRect.height
+    });
     
     // Calculate clicked time
     const totalGridHeight = gridRect.height;
-    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour + 1; // Add 1 to include the end hour
+    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour + 1;
     const pixelsPerHour = totalGridHeight / hoursInGrid;
     
     // Calculate hours and minutes from drop position
@@ -73,9 +109,17 @@ export function ScheduleGrid({
     const absoluteHour = defaultGridConfig.startHour + Math.floor(clickedHours);
     const minutes = Math.floor((clickedHours % 1) * 60 / defaultGridConfig.stepMinutes) * defaultGridConfig.stepMinutes;
     
+    console.log('Time Calculations:', {
+      hoursInGrid,
+      pixelsPerHour,
+      clickedHours,
+      absoluteHour,
+      minutes
+    });
+    
     // Calculate session duration
-    const [startHour, startMinute] = dragSession.session.start.split(':').map(Number);
-    const [endHour, endMinute] = dragSession.session.end.split(':').map(Number);
+    const [startHour, startMinute] = activeDragSession.session.start.split(':').map(Number);
+    const [endHour, endMinute] = activeDragSession.session.end.split(':').map(Number);
     const sessionDuration = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
     
     // Calculate new start and end times
@@ -93,8 +137,16 @@ export function ScheduleGrid({
     const newStart = minutesToTime(finalStartMinutes);
     const newEnd = minutesToTime(finalEndMinutes);
 
+    console.log('Final Position:', {
+      oldPoolDayId: activeDragSession.session.poolDayId,
+      newPoolDayId: poolDayId,
+      oldTime: `${activeDragSession.session.start}-${activeDragSession.session.end}`,
+      newTime: `${newStart}-${newEnd}`,
+      sessionDuration
+    });
+
     // Move the session to the new pool day and position
-    onSessionDragEnd(dragSession.session.id, poolDayId, newStart, newEnd);
+    onSessionDragEnd(activeDragSession.session.id, poolDayId, newStart, newEnd);
     setDragSession(null);
   };
 
