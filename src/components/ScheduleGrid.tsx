@@ -184,9 +184,16 @@ export function ScheduleGrid({
       </div>
 
       {/* Grid */}
-      <div ref={gridRef} className="flex min-h-[840px]">
+      <div 
+        ref={gridRef} 
+        className="flex" 
+        style={{ 
+          height: `${(defaultGridConfig.endHour - defaultGridConfig.startHour + 1) * 60}px`,
+          minHeight: `${(defaultGridConfig.endHour - defaultGridConfig.startHour + 1) * 60}px`
+        }}
+      >
         <HourLabels gridConfig={defaultGridConfig} />
-        <div className="flex-1 flex">
+        <div className="flex-1 flex h-full">
           {pools.map(pool => (
             <PoolColumn
               key={pool.id}

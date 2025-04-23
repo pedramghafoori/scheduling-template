@@ -29,19 +29,32 @@ export function PoolColumn({
 }: PoolColumnProps) {
   // Generate array of hours for grid lines
   const hours = Array.from(
-    { length: gridConfig.endHour - gridConfig.startHour },
+    { length: gridConfig.endHour - gridConfig.startHour + 1 },
     (_, i) => gridConfig.startHour + i
   );
 
+  const handleDragOver = (e: React.DragEvent, poolDayId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    onDragOver(e, poolDayId);
+  };
+
+  const handleDrop = (e: React.DragEvent, poolDayId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onDrop(e, poolDayId);
+  };
+
   return (
-    <div className="flex-1 flex">
+    <div className="flex-1 flex h-full">
       {pool.days.map(day => (
         <div
           key={day.id}
           onDoubleClick={(e) => onGridDoubleClick(e, day.id)}
-          onDragOver={(e) => onDragOver(e, day.id)}
-          onDrop={(e) => onDrop(e, day.id)}
-          className="flex-1 relative border-r last:border-r-0"
+          onDragOver={(e) => handleDragOver(e, day.id)}
+          onDrop={(e) => handleDrop(e, day.id)}
+          className="flex-1 relative border-r last:border-r-0 h-full"
         >
           {/* Hour grid lines */}
           {hours.map(hour => (
@@ -52,7 +65,7 @@ export function PoolColumn({
                 top: `${(hour - gridConfig.startHour) * 60}px`,
                 left: 0,
                 right: 0,
-                pointerEvents: 'none' // Ensure lines don't interfere with clicks
+                pointerEvents: 'none'
               }}
             />
           ))}
@@ -76,8 +89,8 @@ export function PoolColumn({
                     position: 'absolute',
                     width: 'calc(100% - 8px)',
                     left: '4px',
-                    zIndex: 1, // Ensure course blocks appear above grid lines
-                    cursor: 'move' // Add move cursor to indicate draggability
+                    zIndex: 1,
+                    cursor: 'move'
                   }}
                   onDelete={() => onDeleteSession(session.id)}
                   gridConfig={gridConfig}
