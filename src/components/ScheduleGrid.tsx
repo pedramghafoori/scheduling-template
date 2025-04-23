@@ -65,7 +65,7 @@ export function ScheduleGrid({
     
     // Calculate clicked time
     const totalGridHeight = gridRect.height;
-    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour;
+    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour + 1; // Add 1 to include the end hour
     const pixelsPerHour = totalGridHeight / hoursInGrid;
     
     // Calculate hours and minutes from drop position
@@ -106,7 +106,7 @@ export function ScheduleGrid({
     
     // Calculate clicked time
     const totalGridHeight = gridRect.height;
-    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour;
+    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour + 1; // Add 1 to include the end hour
     const pixelsPerHour = totalGridHeight / hoursInGrid;
     
     // Calculate hours and minutes from click position
@@ -130,7 +130,7 @@ export function ScheduleGrid({
     
     // Calculate clicked time
     const totalGridHeight = gridRect.height;
-    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour;
+    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour + 1; // Add 1 to include the end hour
     const pixelsPerHour = totalGridHeight / hoursInGrid;
     
     // Calculate hours and minutes from click position
