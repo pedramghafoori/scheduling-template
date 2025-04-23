@@ -113,8 +113,7 @@ function PoolDayColumn({ pool, day, courses, sessions, gridConfig, onAddSession,
           return (
             <CourseBlock
               key={session.id}
-              session={session}
-              course={course}
+              session={{...session, course}}
               style={{
                 height: `${height}px`,
                 top: `${top}px`,

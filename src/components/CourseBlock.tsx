@@ -3,137 +3,127 @@ import { CSS } from '@dnd-kit/utilities';
 import { Course, Session, GridConfig } from '@/types/schedule';
 import { cn, formatTime, isLightColor } from '@/lib/utils';
 import { CourseMenu } from './CourseMenu';
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, forwardRef } from 'react';
 
 interface CourseBlockProps {
-  session: Session;
-  course: Course;
+  session: Session & { course: Course };
   style?: React.CSSProperties;
-  onDelete?: () => void;
+  onDelete: (id: string) => void;
   isDragging?: boolean;
   onResize?: (newEnd: string) => void;
   gridConfig: GridConfig;
 }
 
-export function CourseBlock({ session, course, style, onDelete, isDragging, onResize, gridConfig }: CourseBlockProps) {
-  const [isResizing, setIsResizing] = useState(false);
-  const resizeRef = useRef<HTMLDivElement>(null);
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform
-  } = useDraggable({
-    id: session.id,
-    data: {
-      type: 'session',
-      session,
-      course
-    }
-  });
+export const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
+  ({ session, style, onDelete, isDragging, onResize, gridConfig }, ref) => {
+    const [isResizing, setIsResizing] = useState(false);
+    const course = session.course || { title: 'Unknown Course', color: '#3B82F6' };
 
-  const backgroundColor = course.color || '#3B82F6';
-  const isLight = isLightColor(backgroundColor);
-  
-  const courseStyles: React.CSSProperties = {
-    ...style,
-    backgroundColor,
-    transform: transform ? CSS.Transform.toString(transform) : undefined,
-    touchAction: 'none'
-  };
-
-  const handleResizeStart = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsResizing(true);
-  };
-
-  useEffect(() => {
-    if (!onResize) return;
-
-    const handleResizeMove = (e: MouseEvent) => {
-      if (!isResizing || !resizeRef.current) return;
-
-      const gridElement = resizeRef.current.closest('[data-schedule-grid]');
-      if (!gridElement) {
-        console.warn('No grid element found for resize operation');
-        return;
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      isDragging: isDraggingNow
+    } = useDraggable({
+      id: session.id,
+      data: {
+        type: 'session',
+        session: { ...session, course }
       }
+    });
 
-      const gridRect = gridElement.getBoundingClientRect();
-      const y = e.clientY - gridRect.top;
-      const hourHeight = gridConfig.stepMinutes * 60;
-      const minuteHeight = hourHeight / 60;
-      const stepMinutes = 15;
-
-      // Calculate new end time
-      const newEndMinutes = Math.floor(y / hourHeight * stepMinutes);
-      const snappedMinutes = Math.ceil(newEndMinutes / stepMinutes) * stepMinutes;
-      
-      // Convert to time string
-      const hours = Math.floor(snappedMinutes / 60);
-      const minutes = snappedMinutes % 60;
-      const newEnd = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-
-      onResize(newEnd);
+    const handleResizeStart = (e: React.MouseEvent) => {
+      if (!onResize) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIsResizing(true);
     };
 
-    const handleResizeEnd = () => {
-      setIsResizing(false);
+    const handleDelete = (e: React.MouseEvent) => {
+      e.stopPropagation(); // Prevent drag from starting
+      onDelete(session.id);
     };
 
-    if (isResizing) {
-      document.addEventListener('mousemove', handleResizeMove);
-      document.addEventListener('mouseup', handleResizeEnd);
-    }
+    useEffect(() => {
+      if (!isResizing) return;
 
-    return () => {
-      document.removeEventListener('mousemove', handleResizeMove);
-      document.removeEventListener('mouseup', handleResizeEnd);
+      const handleMouseMove = (e: MouseEvent) => {
+        if (!onResize) return;
+        const rect = (ref as React.RefObject<HTMLDivElement>).current?.getBoundingClientRect();
+        if (!rect) return;
+
+        const gridHeight = rect.height;
+        const mouseY = e.clientY - rect.top;
+        const hourHeight = gridHeight / (gridConfig.endHour - gridConfig.startHour);
+        const totalHours = mouseY / hourHeight;
+        const hours = Math.floor(totalHours);
+        const minutes = Math.round((totalHours - hours) * 60);
+
+        const newEnd = `${(gridConfig.startHour + hours).toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        onResize(newEnd);
+      };
+
+      const handleMouseUp = () => {
+        setIsResizing(false);
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }, [isResizing, onResize, gridConfig, ref]);
+
+    const backgroundColor = course.color || '#3B82F6';
+    const isLight = isLightColor(backgroundColor);
+    
+    const finalStyle: React.CSSProperties = {
+      ...style,
+      backgroundColor,
+      cursor: isResizing ? 'ns-resize' : 'move',
+      userSelect: 'none',
+      touchAction: 'none',
+      transform: isDragging ? undefined : CSS.Transform.toString(transform),
+      transition: isDragging ? 'none' : 'transform 0.2s ease-in-out'
     };
-  }, [isResizing, onResize, gridConfig.stepMinutes]);
 
-  const hourHeight = gridConfig.stepMinutes * 60;
-  const minuteHeight = hourHeight / 60;
+    const isCurrentlyDragging = isDragging || isDraggingNow;
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={courseStyles}
-      className={cn(
-        'absolute rounded-lg p-2',
-        'cursor-grab active:cursor-grabbing',
-        isLight ? 'text-gray-800' : 'text-white',
-        'hover:brightness-95 transition-all',
-        isDragging && 'opacity-50 shadow-lg z-50',
-        'select-none',
-        isResizing && 'cursor-ns-resize'
-      )}
-      {...attributes}
-      {...listeners}
-    >
-      <div className="flex justify-between items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="font-medium text-sm truncate">{course.title}</div>
-          <div className={cn(
-            'text-xs',
-            isLight ? 'text-gray-600' : 'text-white/90'
-          )}>
-            {formatTime(session.start)} - {formatTime(session.end)}
+    return (
+      <div
+        ref={setNodeRef}
+        {...attributes}
+        {...listeners}
+        className={`relative group ${isCurrentlyDragging ? 'opacity-70' : ''}`}
+        style={finalStyle}
+      >
+        <div className="p-2">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="font-medium text-sm">{course.title}</h3>
+              <p className="text-xs opacity-80">{`${session.start} - ${session.end}`}</p>
+            </div>
+            <button
+              onClick={handleDelete}
+              className="opacity-0 group-hover:opacity-100 text-white hover:text-red-200 transition-opacity"
+              aria-label="Delete course"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
-        {onDelete && (
-          <div className="flex-shrink-0">
-            <CourseMenu onDelete={onDelete} backgroundColor={backgroundColor} />
-          </div>
+        {!isCurrentlyDragging && (
+          <div
+            className="absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize bg-black bg-opacity-20 hover:bg-opacity-30"
+            onMouseDown={handleResizeStart}
+          />
         )}
       </div>
-      {onResize && (
-        <div
-          ref={resizeRef}
-          className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize"
-          onMouseDown={handleResizeStart}
-        />
-      )}
-    </div>
-  );
-} 
+    );
+  }
+); 

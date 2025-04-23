@@ -50,15 +50,16 @@ export function ScheduleGrid({
 
   const mouseSensor = useSensor(MouseSensor, {
     activationConstraint: {
-      distance: 8,
-      delay: 0
+      distance: 5,
+      delay: 0,
+      tolerance: 5
     }
   });
   
   const touchSensor = useSensor(TouchSensor, {
     activationConstraint: {
       delay: 100,
-      tolerance: 8,
+      tolerance: 5,
     },
   });
   
@@ -83,77 +84,52 @@ export function ScheduleGrid({
   function handleDragStart(event: DragStartEvent) {
     const { active } = event;
     const sessionId = active.id as string;
-    
-    // Log initial coordinates
-    const startPoint = event.activatorEvent as PointerEvent;
-    const gridElement = document.querySelector(`[data-day-id="${active.data.current?.poolDayId}"]`);
-    const initialCoordinates = {
-      clientX: startPoint.clientX,
-      clientY: startPoint.clientY,
-      pageX: startPoint.pageX,
-      pageY: startPoint.pageY,
-      scrollY: window.scrollY,
-      gridBounds: gridElement?.getBoundingClientRect()
-    };
-    
-    console.log('Drag started:', {
-      sessionId,
-      activeData: active.data.current,
-      coordinates: initialCoordinates
-    });
-    
-    setActiveId(sessionId);
-    
     const session = sessions.find(s => s.id === sessionId);
-    if (session) {
-      const course = courses.find(c => c.id === session.courseId);
-      if (course) {
-        setActiveSession({ ...session, course });
-      }
-    }
+    if (!session) return;
+
+    const course = courses.find(c => c.id === session.courseId);
+    if (!course) return;
+
+    console.log('Drag start:', {
+      sessionId,
+      session,
+      course
+    });
+
+    setActiveId(sessionId);
+    setActiveSession({ ...session, course });
   }
 
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event;
     if (!over || !active.data.current) return;
 
+    console.log('Drag over:', {
+      activeId: active.id,
+      overId: over.id,
+      activeData: active.data.current
+    });
+
     const gridElement = document.querySelector(`[data-day-id="${over.id}"]`);
     if (!gridElement) return;
 
     const gridRect = gridElement.getBoundingClientRect();
-    const scrollOffset = gridElement.scrollTop;
     const dropPoint = event.activatorEvent as PointerEvent;
-    
-    // Calculate position relative to the grid's viewport position
-    const pointerY = dropPoint.clientY;
-    const gridTop = gridRect.top;
-    let relativeY = pointerY - gridTop + scrollOffset;
-    
-    // Strictly constrain to grid bounds
-    relativeY = Math.max(0, Math.min(relativeY, gridRect.height));
-    
-    const hourHeight = gridRect.height / (defaultGridConfig.endHour - defaultGridConfig.startHour);
-    
-    // Convert to hours and minutes, ensuring we stay within grid bounds
-    const totalHours = relativeY / hourHeight;
-    const hours = Math.floor(totalHours);
-    const minutes = Math.round((totalHours - hours) * 60);
-    
-    // Calculate time in minutes since start of day, ensuring we stay within bounds
-    const dropTimeInMinutes = Math.min(
-      defaultGridConfig.endHour * 60,
-      Math.max(
-        defaultGridConfig.startHour * 60,
-        (defaultGridConfig.startHour + hours) * 60 + minutes
-      )
-    );
-    
-    const snappedMinutes = snapToGrid(
-      dropTimeInMinutes - (defaultGridConfig.startHour * 60),
-      defaultGridConfig.stepMinutes
-    );
-    const newStartMinutes = defaultGridConfig.startHour * 60 + snappedMinutes;
-    
+
+    // Calculate position relative to the grid
+    const pointerX = dropPoint.clientX - gridRect.left;
+    const pointerY = dropPoint.clientY - gridRect.top;
+
+    // Calculate the new time slot based on the drop position
+    const timeSlotWidth = gridRect.width / 24;
+    const timeSlotHeight = gridRect.height / 12;
+    const newTimeSlot = Math.floor(pointerX / timeSlotWidth);
+    const newDaySlot = Math.floor(pointerY / timeSlotHeight);
+
+    // Convert to time format
+    const newStart = `${newTimeSlot.toString().padStart(2, '0')}:00`;
+    const newEnd = `${(newTimeSlot + 1).toString().padStart(2, '0')}:00`;
+
     // Get the session and calculate duration
     const session = sessions.find(s => s.id === active.id);
     if (!session) return;
@@ -162,16 +138,20 @@ export function ScheduleGrid({
     
     // Ensure the session stays within grid bounds
     const maxStartMinutes = (defaultGridConfig.endHour * 60) - sessionDuration;
-    const finalStartMinutes = Math.min(Math.max(defaultGridConfig.startHour * 60, newStartMinutes), maxStartMinutes);
+    const finalStartMinutes = Math.min(Math.max(defaultGridConfig.startHour * 60, newTimeSlot * 60), maxStartMinutes);
     const finalEndMinutes = finalStartMinutes + sessionDuration;
-    
+
     // Only update if the position is valid
     if (finalStartMinutes >= defaultGridConfig.startHour * 60 && 
         finalEndMinutes <= defaultGridConfig.endHour * 60) {
       const newStart = minutesToTime(finalStartMinutes);
       const newEnd = minutesToTime(finalEndMinutes);
       
-      const updatedSession = { ...session, poolDayId: over.id as string, start: newStart, end: newEnd };
+      const course = courses.find(c => c.id === session.courseId);
+      if (!course) return;
+
+      const updatedSession = { ...session, course, poolDayId: over.id as string, start: newStart, end: newEnd };
+      console.log('Updating active session:', updatedSession);
       setActiveSession(prev => prev ? { ...prev, ...updatedSession } : null);
     }
   }
@@ -179,45 +159,26 @@ export function ScheduleGrid({
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     
-    console.log('Drag ended:', {
-      activeId: active.id,
-      overId: over?.id,
-      activeData: active.data.current,
-      overData: over?.data.current
-    });
-    
+    if (!over) {
+      // If dropped outside the grid, delete the session
+      onDeleteSession(active.id as string);
+      setActiveSession(null);
+      return;
+    }
+
     if (over && active.data.current) {
       const session = sessions.find(s => s.id === active.id);
-      if (!session) {
-        console.warn('No session found for drag end:', active.id);
-        return;
-      }
+      if (!session) return;
       
       const gridElement = document.querySelector(`[data-day-id="${over.id}"]`);
-      if (!gridElement) {
-        console.warn('No grid element found for drag end:', over.id);
-        return;
-      }
+      if (!gridElement) return;
       
       const gridRect = gridElement.getBoundingClientRect();
-      const scrollOffset = gridElement.scrollTop;
       const dropPoint = event.activatorEvent as PointerEvent;
       
-      console.log('Drop coordinates:', {
-        clientY: dropPoint.clientY,
-        gridTop: gridRect.top,
-        scrollOffset,
-        gridHeight: gridRect.height
-      });
-      
       // Calculate relative position within grid
-      let relativeY = dropPoint.clientY - gridRect.top + scrollOffset;
+      let relativeY = dropPoint.clientY - gridRect.top;
       relativeY = Math.max(0, Math.min(relativeY, gridRect.height));
-      
-      console.log('Calculated position:', {
-        relativeY,
-        gridHeight: gridRect.height
-      });
       
       // Convert to grid time
       const hourHeight = gridRect.height / (defaultGridConfig.endHour - defaultGridConfig.startHour);
@@ -226,14 +187,6 @@ export function ScheduleGrid({
       const minutes = Math.round((totalHours - hours) * 60);
       
       const dropTimeInMinutes = (defaultGridConfig.startHour + hours) * 60 + minutes;
-      
-      console.log('Time calculations:', {
-        hourHeight,
-        totalHours,
-        hours,
-        minutes,
-        dropTimeInMinutes
-      });
       
       // Calculate session duration
       const sessionDuration = calculateHeight(session.start, session.end);
@@ -248,22 +201,9 @@ export function ScheduleGrid({
       );
       const finalEndMinutes = finalStartMinutes + sessionDuration;
       
-      console.log('Final position:', {
-        finalStartMinutes,
-        finalEndMinutes,
-        sessionDuration
-      });
-      
       // Convert to time format
       const newStart = minutesToTime(finalStartMinutes);
       const newEnd = minutesToTime(finalEndMinutes);
-      
-      console.log('Updating session:', {
-        sessionId: session.id,
-        newPoolDayId: over.id,
-        newStart,
-        newEnd
-      });
       
       // Update session position
       onSessionDragEnd(session.id, over.id as string, newStart, newEnd);
@@ -335,20 +275,28 @@ export function ScheduleGrid({
         <div className="flex h-full">
           <HourLabels gridConfig={defaultGridConfig} />
           
-          {pools.map(pool => (
-            <PoolColumn
-              key={pool.id}
-              pool={pool}
-              sessions={sessions.filter(s => 
-                pool.days.some(d => d.id === s.poolDayId)
-              )}
-              courses={courses}
-              gridConfig={defaultGridConfig}
-              onAddSession={onAddSession}
-              onDeleteSession={onDeleteSession}
-              onResize={handleResize}
-            />
-          ))}
+          {pools.map(pool => {
+            const poolSessions = sessions.filter(s => {
+              if (!pool.days.some(d => d.id === s.poolDayId)) return false;
+              return courses.some(c => c.id === s.courseId);
+            }).map(s => ({
+              ...s,
+              course: courses.find(c => c.id === s.courseId)!
+            }));
+
+            return (
+              <PoolColumn
+                key={pool.id}
+                pool={pool}
+                sessions={poolSessions}
+                courses={courses}
+                gridConfig={defaultGridConfig}
+                onAddSession={onAddSession}
+                onDeleteSession={onDeleteSession}
+                onResize={handleResize}
+              />
+            );
+          })}
         </div>
 
         <DragOverlay
@@ -358,15 +306,16 @@ export function ScheduleGrid({
           {activeSession ? (
             <CourseBlock
               session={activeSession}
-              course={activeSession.course}
               style={{
                 width: '200px',
-                height: `${calculateHeight(activeSession.start, activeSession.end) / defaultGridConfig.stepMinutes * 60}px`,
-                position: 'relative',
-                zIndex: 50
+                height: `${calculateHeight(activeSession.start, activeSession.end)}px`,
+                position: 'absolute',
+                zIndex: 50,
+                pointerEvents: 'none'
               }}
               isDragging={true}
               gridConfig={defaultGridConfig}
+              onDelete={onDeleteSession}
             />
           ) : null}
         </DragOverlay>
