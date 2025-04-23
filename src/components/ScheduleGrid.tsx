@@ -160,6 +160,30 @@ export function ScheduleGrid({
 
   return (
     <div className="relative">
+      {/* Headers */}
+      <div className="flex border-b">
+        <div className="w-12" /> {/* Spacer for hour labels */}
+        <div className="flex-1 flex">
+          {pools.map(pool => (
+            <div key={pool.id} className="flex-1">
+              {/* Pool title */}
+              <div className="font-bold p-2 text-center bg-gray-50 border-b">
+                {pool.title}
+              </div>
+              {/* Day headers */}
+              <div className="flex">
+                {pool.days.map(day => (
+                  <div key={day.id} className="flex-1 font-medium p-2 text-center">
+                    {day.day.charAt(0).toUpperCase() + day.day.slice(1)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Grid */}
       <div ref={gridRef} className="flex min-h-[840px]">
         <HourLabels gridConfig={defaultGridConfig} />
         <div className="flex-1 flex">
@@ -185,6 +209,7 @@ export function ScheduleGrid({
           ))}
         </div>
       </div>
+
       {showAddPopup && (
         <div
           className="absolute bg-white shadow-lg rounded-lg p-4 z-50"
