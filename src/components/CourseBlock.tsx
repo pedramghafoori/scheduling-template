@@ -10,6 +10,7 @@ interface CourseBlockProps {
   gridConfig: GridConfig;
   onResize: (newEnd: string) => void;
   onDragStart: (event: React.DragEvent<HTMLDivElement>, session: Session) => void;
+  onDragEnd: () => void;
   draggable?: boolean;
 }
 
@@ -20,6 +21,7 @@ export function CourseBlock({
   gridConfig,
   onResize,
   onDragStart,
+  onDragEnd,
   draggable
 }: CourseBlockProps) {
   const [isResizing, setIsResizing] = useState(false);
@@ -127,6 +129,7 @@ export function CourseBlock({
     <div
       ref={blockRef}
       onDragStart={handleDragStart}
+      onDragEnd={onDragEnd}
       draggable={draggable}
       className="relative group rounded-lg shadow-sm"
       style={finalStyle}

@@ -30,12 +30,23 @@ export function ScheduleGrid({
 }: ScheduleGridProps) {
   const [showAddPopup, setShowAddPopup] = useState<{ x: number; y: number; poolDayId: string } | null>(null);
   const [dragSession, setDragSession] = useState<{ session: Session; offsetY: number } | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const handleDragStart = (event: React.DragEvent, session: Session) => {
     const element = event.currentTarget as HTMLElement;
     const rect = element.getBoundingClientRect();
     const offsetY = event.clientY - rect.top;
+    
+    // Store session data in dataTransfer
+    const sessionData = JSON.stringify({
+      id: session.id,
+      poolDayId: session.poolDayId,
+      start: session.start,
+      end: session.end,
+      courseId: session.courseId
+    });
+    event.dataTransfer.setData('application/json', sessionData);
     
     console.log('Drag Start:', {
       sessionId: session.id,
@@ -45,56 +56,72 @@ export function ScheduleGrid({
     });
     
     setDragSession({ session, offsetY });
+    setActiveDragId(session.id);
     
-    // Store drag session data in dataTransfer
-    event.dataTransfer.setData('application/json', JSON.stringify({ 
-      sessionId: session.id,
-      offsetY,
-      start: session.start,
-      end: session.end
-    }));
+    // Create a semi-transparent drag image
+    const dragImage = element.cloneNode(true) as HTMLElement;
+    dragImage.style.opacity = '0.5';
+    dragImage.style.position = 'absolute';
+    dragImage.style.top = '-1000px';
+    document.body.appendChild(dragImage);
+    event.dataTransfer.setDragImage(dragImage, 0, offsetY);
+    setTimeout(() => document.body.removeChild(dragImage), 0);
   };
 
   const handleDragOver = (event: React.DragEvent, poolDayId: string) => {
     event.preventDefault();
+    event.stopPropagation();
+    
+    // If we lost dragSession but have data in dataTransfer, try to recover
+    if (!dragSession) {
+      try {
+        const sessionData = event.dataTransfer.getData('application/json');
+        if (sessionData) {
+          const parsedSession = JSON.parse(sessionData);
+          const session = sessions.find(s => s.id === parsedSession.id);
+          if (session) {
+            const offsetY = 20; // Default offset if we can't recover the exact value
+            setDragSession({ session, offsetY });
+            setActiveDragId(session.id);
+          }
+        }
+      } catch (error) {
+        console.log('Failed to recover session data:', error);
+      }
+    }
+    
     console.log('Drag Over:', {
       poolDayId,
       clientY: event.clientY,
-      dragSession: dragSession?.session.id
+      dragSession: dragSession?.session.id,
+      activeDragId,
+      hasTransferData: !!event.dataTransfer.types.includes('application/json')
     });
+    
     event.dataTransfer.dropEffect = 'move';
   };
 
   const handleDrop = (event: React.DragEvent, poolDayId: string) => {
     event.preventDefault();
+    event.stopPropagation();
     
-    // Try to get drag data from dataTransfer if dragSession is lost
-    let activeDragSession = dragSession;
-    if (!activeDragSession) {
-      try {
-        const dragData = JSON.parse(event.dataTransfer.getData('application/json'));
-        const session = sessions.find(s => s.id === dragData.sessionId);
-        if (session) {
-          activeDragSession = { session, offsetY: dragData.offsetY };
-        }
-      } catch (e) {
-        console.log('Drop failed:', { reason: 'Could not restore drag session' });
-        return;
-      }
-    }
-    
-    if (!activeDragSession || !gridRef.current) {
-      console.log('Drop failed:', { reason: !activeDragSession ? 'No drag session' : 'No grid ref' });
+    if (!dragSession || !gridRef.current) {
+      console.log('Drop failed:', { 
+        reason: !dragSession ? 'No drag session' : 'No grid ref',
+        dragSession,
+        activeDragId,
+        gridRef: !!gridRef.current
+      });
       return;
     }
-    
+
     const gridRect = gridRef.current.getBoundingClientRect();
-    const relativeY = event.clientY - gridRect.top - activeDragSession.offsetY;
+    const relativeY = event.clientY - gridRect.top - dragSession.offsetY;
     
     console.log('Drop Calculations:', {
       gridTop: gridRect.top,
       clientY: event.clientY,
-      offsetY: activeDragSession.offsetY,
+      offsetY: dragSession.offsetY,
       relativeY,
       gridHeight: gridRect.height
     });
@@ -118,8 +145,8 @@ export function ScheduleGrid({
     });
     
     // Calculate session duration
-    const [startHour, startMinute] = activeDragSession.session.start.split(':').map(Number);
-    const [endHour, endMinute] = activeDragSession.session.end.split(':').map(Number);
+    const [startHour, startMinute] = dragSession.session.start.split(':').map(Number);
+    const [endHour, endMinute] = dragSession.session.end.split(':').map(Number);
     const sessionDuration = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
     
     // Calculate new start and end times
@@ -138,16 +165,25 @@ export function ScheduleGrid({
     const newEnd = minutesToTime(finalEndMinutes);
 
     console.log('Final Position:', {
-      oldPoolDayId: activeDragSession.session.poolDayId,
+      oldPoolDayId: dragSession.session.poolDayId,
       newPoolDayId: poolDayId,
-      oldTime: `${activeDragSession.session.start}-${activeDragSession.session.end}`,
+      oldTime: `${dragSession.session.start}-${dragSession.session.end}`,
       newTime: `${newStart}-${newEnd}`,
       sessionDuration
     });
 
     // Move the session to the new pool day and position
-    onSessionDragEnd(activeDragSession.session.id, poolDayId, newStart, newEnd);
+    onSessionDragEnd(dragSession.session.id, poolDayId, newStart, newEnd);
+
+    // Clear both dragSession and activeDragId
     setDragSession(null);
+    setActiveDragId(null);
+  };
+
+  const handleDragEnd = () => {
+    // Clean up drag state if drop didn't occur
+    setDragSession(null);
+    setActiveDragId(null);
   };
 
   const handleGridDoubleClick = (event: React.MouseEvent, poolDayId: string) => {
@@ -264,6 +300,7 @@ export function ScheduleGrid({
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
             />
           ))}
         </div>

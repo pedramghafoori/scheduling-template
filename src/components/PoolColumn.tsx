@@ -13,6 +13,7 @@ interface PoolColumnProps {
   onDragStart: (event: React.DragEvent, session: Session) => void;
   onDragOver: (event: React.DragEvent, poolDayId: string) => void;
   onDrop: (event: React.DragEvent, poolDayId: string) => void;
+  onDragEnd: () => void;
 }
 
 export function PoolColumn({
@@ -25,7 +26,8 @@ export function PoolColumn({
   onGridDoubleClick,
   onDragStart,
   onDragOver,
-  onDrop
+  onDrop,
+  onDragEnd
 }: PoolColumnProps) {
   // Generate array of hours for grid lines
   const hours = Array.from(
@@ -96,6 +98,7 @@ export function PoolColumn({
                   gridConfig={gridConfig}
                   onResize={(newEnd) => onResize(session.id, newEnd)}
                   onDragStart={(e) => onDragStart(e, session)}
+                  onDragEnd={onDragEnd}
                   draggable={true}
                 />
               );
