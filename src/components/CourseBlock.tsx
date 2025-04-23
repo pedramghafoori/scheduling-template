@@ -6,66 +6,109 @@ import { useRef, useState, useEffect } from 'react';
 interface CourseBlockProps {
   session: Session & { course: Course };
   style?: React.CSSProperties;
-  onDelete: (id: string) => void;
-  onResize?: (newEnd: string) => void;
+  onDelete: () => void;
   gridConfig: GridConfig;
+  onResize: (newEnd: string) => void;
+  onClick: (session: Session) => void;
+  onDragStart: (event: React.DragEvent<HTMLDivElement>, session: Session) => void;
   isActive?: boolean;
-  onClick?: (session: Session) => void;
+  draggable?: boolean;
 }
 
-export const CourseBlock = ({
+export function CourseBlock({
   session,
   style,
   onDelete,
-  onResize,
   gridConfig,
+  onResize,
+  onClick,
+  onDragStart,
   isActive,
-  onClick
-}: CourseBlockProps) => {
+  draggable
+}: CourseBlockProps) {
   const [isResizing, setIsResizing] = useState(false);
-  const course = session.course || { title: 'Unknown Course', color: '#3B82F6' };
+  const [startResizeY, setStartResizeY] = useState(0);
+  const [startHeight, setStartHeight] = useState(0);
+  const [initialEndTime, setInitialEndTime] = useState('');
   const blockRef = useRef<HTMLDivElement>(null);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onClick) {
-      onClick(session);
-    }
-  };
-
-  const handleResizeStart = (e: React.MouseEvent) => {
-    if (!onResize) return;
-    e.preventDefault();
-    e.stopPropagation();
-    setIsResizing(true);
+    onClick(session);
   };
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onDelete(session.id);
+    onDelete();
+  };
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    onDragStart(e, session);
+  };
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    if (!onResize || !blockRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setStartResizeY(e.clientY);
+    setStartHeight(blockRef.current.offsetHeight);
+    setInitialEndTime(session.end);
+    setIsResizing(true);
   };
 
   useEffect(() => {
     if (!isResizing) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!onResize) return;
-      const rect = blockRef.current?.getBoundingClientRect();
-      if (!rect) return;
+      if (!onResize || !blockRef.current) return;
 
-      const gridHeight = rect.height;
-      const mouseY = e.clientY - rect.top;
-      const hourHeight = gridHeight / (gridConfig.endHour - gridConfig.startHour);
-      const totalHours = mouseY / hourHeight;
-      const hours = Math.floor(totalHours);
-      const minutes = Math.round((totalHours - hours) * 60);
-
-      const newEnd = `${(gridConfig.startHour + hours).toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      // Calculate the change in height
+      const deltaY = e.clientY - startResizeY;
+      const hourHeight = 60; // 1 hour = 60px
+      
+      // Calculate new height ensuring it doesn't go below minimum
+      const minHeight = 30; // Minimum 30px height (30 minutes)
+      const newHeight = Math.max(minHeight, startHeight + deltaY);
+      
+      // Convert height change to minutes
+      const heightDiffInMinutes = Math.round((newHeight - startHeight) / hourHeight * 60);
+      
+      // Parse initial end time
+      const [endHour, endMinute] = initialEndTime.split(':').map(Number);
+      const initialEndMinutes = endHour * 60 + endMinute;
+      
+      // Calculate new end time in minutes
+      const newEndMinutes = initialEndMinutes + heightDiffInMinutes;
+      
+      // Ensure new end time doesn't exceed grid bounds
+      const maxEndMinutes = gridConfig.endHour * 60;
+      const [startHour, startMinute] = session.start.split(':').map(Number);
+      const startMinutes = startHour * 60 + startMinute;
+      
+      // Bound the end time between start time + 15 minutes and grid end
+      const boundedEndMinutes = Math.min(
+        maxEndMinutes,
+        Math.max(
+          startMinutes + gridConfig.stepMinutes,
+          newEndMinutes
+        )
+      );
+      
+      // Convert back to HH:mm format
+      const finalHours = Math.floor(boundedEndMinutes / 60);
+      const finalMinutes = boundedEndMinutes % 60;
+      const newEnd = `${finalHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+      
       onResize(newEnd);
     };
 
     const handleMouseUp = () => {
       setIsResizing(false);
+      setStartResizeY(0);
+      setStartHeight(0);
+      setInitialEndTime('');
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -75,9 +118,9 @@ export const CourseBlock = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, onResize, gridConfig]);
+  }, [isResizing, startResizeY, startHeight, initialEndTime, onResize, gridConfig, session]);
 
-  const backgroundColor = course.color || '#3B82F6';
+  const backgroundColor = session.course.color || '#3B82F6';
   const isLight = isLightColor(backgroundColor);
   
   const finalStyle: React.CSSProperties = {
@@ -86,7 +129,7 @@ export const CourseBlock = ({
     cursor: isResizing ? 'ns-resize' : 'pointer',
     userSelect: 'none',
     opacity: isActive ? 0.7 : 1,
-    transition: 'opacity 0.2s ease-in-out, transform 0.2s ease-in-out',
+    transition: isResizing ? 'none' : 'opacity 0.2s ease-in-out, transform 0.2s ease-in-out',
     transform: isActive ? 'scale(0.98)' : undefined
   };
 
@@ -94,6 +137,8 @@ export const CourseBlock = ({
     <div
       ref={blockRef}
       onClick={handleClick}
+      onDragStart={handleDragStart}
+      draggable={draggable}
       className={cn(
         'relative group rounded-lg shadow-sm',
         isActive && 'ring-2 ring-blue-500'
@@ -103,7 +148,7 @@ export const CourseBlock = ({
       <div className="p-2">
         <div className="flex justify-between items-start">
           <div>
-            <h3 className="font-medium text-sm">{course.title}</h3>
+            <h3 className="font-medium text-sm">{session.course.title}</h3>
             <p className="text-xs opacity-80">{`${session.start} - ${session.end}`}</p>
           </div>
           <button
@@ -119,10 +164,10 @@ export const CourseBlock = ({
       </div>
       {!isActive && (
         <div
-          className="absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize bg-black bg-opacity-20 hover:bg-opacity-30"
+          className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize bg-black bg-opacity-20 hover:bg-opacity-30"
           onMouseDown={handleResizeStart}
         />
       )}
     </div>
   );
-}; 
+} 

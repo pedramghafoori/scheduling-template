@@ -30,6 +30,7 @@ export function ScheduleGrid({
 }: ScheduleGridProps) {
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [showAddPopup, setShowAddPopup] = useState<{ x: number; y: number; poolDayId: string } | null>(null);
+  const [dragSession, setDragSession] = useState<{ session: Session; offsetY: number } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const handleSessionClick = (session: Session) => {
@@ -40,6 +41,72 @@ export function ScheduleGrid({
       setActiveSession(session);
     }
     setShowAddPopup(null); // Close popup when selecting a session
+  };
+
+  const handleDragStart = (event: React.DragEvent, session: Session) => {
+    const element = event.currentTarget as HTMLElement;
+    const rect = element.getBoundingClientRect();
+    const offsetY = event.clientY - rect.top;
+    
+    setDragSession({ session, offsetY });
+    event.dataTransfer.setData('text/plain', session.id); // Required for Firefox
+    
+    // Create a semi-transparent drag image
+    const dragImage = element.cloneNode(true) as HTMLElement;
+    dragImage.style.opacity = '0.5';
+    dragImage.style.position = 'absolute';
+    dragImage.style.top = '-1000px';
+    document.body.appendChild(dragImage);
+    event.dataTransfer.setDragImage(dragImage, 0, offsetY);
+    setTimeout(() => document.body.removeChild(dragImage), 0);
+  };
+
+  const handleDragOver = (event: React.DragEvent, poolDayId: string) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (event: React.DragEvent, poolDayId: string) => {
+    event.preventDefault();
+    
+    if (!dragSession || !gridRef.current) return;
+    
+    const gridRect = gridRef.current.getBoundingClientRect();
+    const relativeY = event.clientY - gridRect.top - dragSession.offsetY;
+    
+    // Calculate clicked time
+    const totalGridHeight = gridRect.height;
+    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour;
+    const pixelsPerHour = totalGridHeight / hoursInGrid;
+    
+    // Calculate hours and minutes from drop position
+    const clickedHours = relativeY / pixelsPerHour;
+    const absoluteHour = defaultGridConfig.startHour + Math.floor(clickedHours);
+    const minutes = Math.floor((clickedHours % 1) * 60 / defaultGridConfig.stepMinutes) * defaultGridConfig.stepMinutes;
+    
+    // Calculate session duration
+    const [startHour, startMinute] = dragSession.session.start.split(':').map(Number);
+    const [endHour, endMinute] = dragSession.session.end.split(':').map(Number);
+    const sessionDuration = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
+    
+    // Calculate new start and end times
+    const newStartMinutes = absoluteHour * 60 + minutes;
+    const newEndMinutes = newStartMinutes + sessionDuration;
+    
+    // Ensure times are within grid bounds
+    const finalStartMinutes = Math.max(
+      defaultGridConfig.startHour * 60,
+      Math.min(newStartMinutes, defaultGridConfig.endHour * 60 - sessionDuration)
+    );
+    const finalEndMinutes = finalStartMinutes + sessionDuration;
+    
+    // Convert to time format
+    const newStart = minutesToTime(finalStartMinutes);
+    const newEnd = minutesToTime(finalEndMinutes);
+
+    // Move the session to the new pool day and position
+    onSessionDragEnd(dragSession.session.id, poolDayId, newStart, newEnd);
+    setDragSession(null);
   };
 
   const handleGridDoubleClick = (event: React.MouseEvent, poolDayId: string) => {
@@ -174,6 +241,9 @@ export function ScheduleGrid({
               onSessionClick={handleSessionClick}
               onGridClick={handleGridClick}
               onGridDoubleClick={handleGridDoubleClick}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
               activeSessionId={activeSession?.id}
             />
           ))}

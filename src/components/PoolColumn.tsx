@@ -12,6 +12,9 @@ interface PoolColumnProps {
   onSessionClick: (session: Session) => void;
   onGridClick: (event: React.MouseEvent, poolDayId: string) => void;
   onGridDoubleClick: (event: React.MouseEvent, poolDayId: string) => void;
+  onDragStart: (event: React.DragEvent, session: Session) => void;
+  onDragOver: (event: React.DragEvent, poolDayId: string) => void;
+  onDrop: (event: React.DragEvent, poolDayId: string) => void;
   activeSessionId?: string;
 }
 
@@ -25,6 +28,9 @@ export function PoolColumn({
   onSessionClick,
   onGridClick,
   onGridDoubleClick,
+  onDragStart,
+  onDragOver,
+  onDrop,
   activeSessionId
 }: PoolColumnProps) {
   // Generate array of hours for grid lines
@@ -40,6 +46,8 @@ export function PoolColumn({
           key={day.id}
           onClick={(e) => onGridClick(e, day.id)}
           onDoubleClick={(e) => onGridDoubleClick(e, day.id)}
+          onDragOver={(e) => onDragOver(e, day.id)}
+          onDrop={(e) => onDrop(e, day.id)}
           className="flex-1 relative border-r last:border-r-0"
         >
           {/* Hour grid lines */}
@@ -75,13 +83,16 @@ export function PoolColumn({
                     position: 'absolute',
                     width: 'calc(100% - 8px)',
                     left: '4px',
-                    zIndex: 1 // Ensure course blocks appear above grid lines
+                    zIndex: 1, // Ensure course blocks appear above grid lines
+                    cursor: 'move' // Add move cursor to indicate draggability
                   }}
                   onDelete={() => onDeleteSession(session.id)}
                   gridConfig={gridConfig}
                   onResize={(newEnd) => onResize(session.id, newEnd)}
                   onClick={onSessionClick}
+                  onDragStart={(e) => onDragStart(e, session)}
                   isActive={session.id === activeSessionId}
+                  draggable={true}
                 />
               );
             })}
