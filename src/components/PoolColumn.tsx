@@ -9,13 +9,10 @@ interface PoolColumnProps {
   gridConfig: GridConfig;
   onDeleteSession: (sessionId: string) => void;
   onResize: (sessionId: string, newEnd: string) => void;
-  onSessionClick: (session: Session) => void;
-  onGridClick: (event: React.MouseEvent, poolDayId: string) => void;
   onGridDoubleClick: (event: React.MouseEvent, poolDayId: string) => void;
   onDragStart: (event: React.DragEvent, session: Session) => void;
   onDragOver: (event: React.DragEvent, poolDayId: string) => void;
   onDrop: (event: React.DragEvent, poolDayId: string) => void;
-  activeSessionId?: string;
 }
 
 export function PoolColumn({
@@ -25,13 +22,10 @@ export function PoolColumn({
   gridConfig,
   onDeleteSession,
   onResize,
-  onSessionClick,
-  onGridClick,
   onGridDoubleClick,
   onDragStart,
   onDragOver,
-  onDrop,
-  activeSessionId
+  onDrop
 }: PoolColumnProps) {
   // Generate array of hours for grid lines
   const hours = Array.from(
@@ -44,7 +38,6 @@ export function PoolColumn({
       {pool.days.map(day => (
         <div
           key={day.id}
-          onClick={(e) => onGridClick(e, day.id)}
           onDoubleClick={(e) => onGridDoubleClick(e, day.id)}
           onDragOver={(e) => onDragOver(e, day.id)}
           onDrop={(e) => onDrop(e, day.id)}
@@ -89,9 +82,7 @@ export function PoolColumn({
                   onDelete={() => onDeleteSession(session.id)}
                   gridConfig={gridConfig}
                   onResize={(newEnd) => onResize(session.id, newEnd)}
-                  onClick={onSessionClick}
                   onDragStart={(e) => onDragStart(e, session)}
-                  isActive={session.id === activeSessionId}
                   draggable={true}
                 />
               );

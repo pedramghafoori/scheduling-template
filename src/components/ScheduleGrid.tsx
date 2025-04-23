@@ -28,20 +28,9 @@ export function ScheduleGrid({
   onAddSession,
   onDeleteSession
 }: ScheduleGridProps) {
-  const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [showAddPopup, setShowAddPopup] = useState<{ x: number; y: number; poolDayId: string } | null>(null);
   const [dragSession, setDragSession] = useState<{ session: Session; offsetY: number } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-
-  const handleSessionClick = (session: Session) => {
-    // Toggle active session
-    if (activeSession?.id === session.id) {
-      setActiveSession(null);
-    } else {
-      setActiveSession(session);
-    }
-    setShowAddPopup(null); // Close popup when selecting a session
-  };
 
   const handleDragStart = (event: React.DragEvent, session: Session) => {
     const element = event.currentTarget as HTMLElement;
@@ -110,7 +99,7 @@ export function ScheduleGrid({
   };
 
   const handleGridDoubleClick = (event: React.MouseEvent, poolDayId: string) => {
-    if (!gridRef.current || activeSession) return; // Don't show popup if we're moving a session
+    if (!gridRef.current) return;
 
     const gridRect = gridRef.current.getBoundingClientRect();
     const relativeY = event.clientY - gridRect.top;
@@ -131,56 +120,6 @@ export function ScheduleGrid({
       y: event.clientY,
       poolDayId
     });
-  };
-
-  const handleGridClick = (event: React.MouseEvent, poolDayId: string) => {
-    // Close add popup if clicking elsewhere
-    if (showAddPopup) {
-      setShowAddPopup(null);
-      return;
-    }
-
-    // If no active session or same pool day, do nothing
-    if (!activeSession || !gridRef.current) {
-      return;
-    }
-
-    const gridRect = gridRef.current.getBoundingClientRect();
-    const relativeY = event.clientY - gridRect.top;
-    
-    // Calculate clicked time
-    const totalGridHeight = gridRect.height;
-    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour;
-    const pixelsPerHour = totalGridHeight / hoursInGrid;
-    
-    // Calculate hours and minutes from click position
-    const clickedHours = relativeY / pixelsPerHour;
-    const absoluteHour = defaultGridConfig.startHour + Math.floor(clickedHours);
-    const minutes = Math.floor((clickedHours % 1) * 60 / defaultGridConfig.stepMinutes) * defaultGridConfig.stepMinutes;
-    
-    // Calculate session duration
-    const [startHour, startMinute] = activeSession.start.split(':').map(Number);
-    const [endHour, endMinute] = activeSession.end.split(':').map(Number);
-    const sessionDuration = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
-    
-    // Calculate new start and end times
-    const newStartMinutes = absoluteHour * 60 + minutes;
-    const newEndMinutes = newStartMinutes + sessionDuration;
-    
-    // Ensure times are within grid bounds
-    const finalStartMinutes = Math.max(
-      defaultGridConfig.startHour * 60,
-      Math.min(newStartMinutes, defaultGridConfig.endHour * 60 - sessionDuration)
-    );
-    const finalEndMinutes = finalStartMinutes + sessionDuration;
-    
-    // Convert to time format
-    const newStart = minutesToTime(finalStartMinutes);
-    const newEnd = minutesToTime(finalEndMinutes);
-
-    // Move the session to the new pool day and position
-    onSessionDragEnd(activeSession.id, poolDayId, newStart, newEnd);
-    setActiveSession(null); // Clear active session after moving
   };
 
   const handleAddCourse = (courseId: string) => {
@@ -238,13 +177,10 @@ export function ScheduleGrid({
               gridConfig={defaultGridConfig}
               onDeleteSession={onDeleteSession}
               onResize={handleResize}
-              onSessionClick={handleSessionClick}
-              onGridClick={handleGridClick}
               onGridDoubleClick={handleGridDoubleClick}
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
-              activeSessionId={activeSession?.id}
             />
           ))}
         </div>
@@ -270,11 +206,6 @@ export function ScheduleGrid({
               </button>
             ))}
           </div>
-        </div>
-      )}
-      {activeSession && (
-        <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-          Click anywhere in the grid to move the selected session
         </div>
       )}
     </div>

@@ -9,9 +9,7 @@ interface CourseBlockProps {
   onDelete: () => void;
   gridConfig: GridConfig;
   onResize: (newEnd: string) => void;
-  onClick: (session: Session) => void;
   onDragStart: (event: React.DragEvent<HTMLDivElement>, session: Session) => void;
-  isActive?: boolean;
   draggable?: boolean;
 }
 
@@ -21,9 +19,7 @@ export function CourseBlock({
   onDelete,
   gridConfig,
   onResize,
-  onClick,
   onDragStart,
-  isActive,
   draggable
 }: CourseBlockProps) {
   const [isResizing, setIsResizing] = useState(false);
@@ -31,11 +27,6 @@ export function CourseBlock({
   const [startHeight, setStartHeight] = useState(0);
   const [initialEndTime, setInitialEndTime] = useState('');
   const blockRef = useRef<HTMLDivElement>(null);
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onClick(session);
-  };
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -126,34 +117,34 @@ export function CourseBlock({
   const finalStyle: React.CSSProperties = {
     ...style,
     backgroundColor,
-    cursor: isResizing ? 'ns-resize' : 'pointer',
+    cursor: isResizing ? 'ns-resize' : 'move',
     userSelect: 'none',
-    opacity: isActive ? 0.7 : 1,
-    transition: isResizing ? 'none' : 'opacity 0.2s ease-in-out, transform 0.2s ease-in-out',
-    transform: isActive ? 'scale(0.98)' : undefined
+    transition: isResizing ? 'none' : 'opacity 0.2s ease-in-out',
+    color: isLight ? '#000000' : '#FFFFFF'
   };
 
   return (
     <div
       ref={blockRef}
-      onClick={handleClick}
       onDragStart={handleDragStart}
       draggable={draggable}
-      className={cn(
-        'relative group rounded-lg shadow-sm',
-        isActive && 'ring-2 ring-blue-500'
-      )}
+      className="relative group rounded-lg shadow-sm"
       style={finalStyle}
     >
       <div className="p-2">
         <div className="flex justify-between items-start">
           <div>
             <h3 className="font-medium text-sm">{session.course.title}</h3>
-            <p className="text-xs opacity-80">{`${session.start} - ${session.end}`}</p>
+            <p className={`text-xs ${isLight ? 'text-black/70' : 'text-white/70'}`}>
+              {`${session.start} - ${session.end}`}
+            </p>
           </div>
           <button
             onClick={handleDelete}
-            className="opacity-0 group-hover:opacity-100 text-white hover:text-red-200 transition-opacity"
+            className={cn(
+              "opacity-0 group-hover:opacity-100 transition-opacity",
+              isLight ? "text-black/60 hover:text-red-600" : "text-white/60 hover:text-red-200"
+            )}
             aria-label="Delete course"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,12 +153,13 @@ export function CourseBlock({
           </button>
         </div>
       </div>
-      {!isActive && (
-        <div
-          className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize bg-black bg-opacity-20 hover:bg-opacity-30"
-          onMouseDown={handleResizeStart}
-        />
-      )}
+      <div
+        className={cn(
+          "absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-opacity-30",
+          isLight ? "bg-black/10 hover:bg-black/20" : "bg-white/10 hover:bg-white/20"
+        )}
+        onMouseDown={handleResizeStart}
+      />
     </div>
   );
 } 
