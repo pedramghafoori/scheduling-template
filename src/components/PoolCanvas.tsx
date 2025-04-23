@@ -40,8 +40,16 @@ const PoolCanvas = ({ pool, onDragStart, onDragEnd }: PoolCanvasProps) => {
         offsetY: dragSession.offsetY
       });
 
-      // Calculate the drop position
-      const dropTimeMinutes = Math.max(0, Math.min(900, yPosToTime(dragSession.offsetY))); // Ensure within bounds (0-900 minutes)
+      // Use live pointer position captured during drag
+      const { pointerY } = useDragStore.getState();
+      if (pointerY == null) {
+        onDragEnd(event);          // fallback – no valid pointer info
+        return;
+      }
+      const dropTimeMinutes = Math.max(
+        0,
+        Math.min(900, yPosToTime(pointerY))
+      ); // Ensure within bounds (0‑900 minutes)
 
       if (type === "bank-block") {
         // Creating new session from bank
@@ -109,6 +117,8 @@ const PoolDayColumn = ({ poolId, day, onDragEnd }: PoolDayColumnProps) => {
       const rect = containerRef.current.getBoundingClientRect();
       const relativeY = e.clientY - rect.top;
       setMouseY(relativeY);
+      // keep global drag state in sync
+      useDragStore.getState().setPointerY(relativeY);
     }
   };
 

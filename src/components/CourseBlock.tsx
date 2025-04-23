@@ -1,8 +1,7 @@
-import { forwardRef, useRef, useEffect } from "react";
+import { forwardRef, useEffect } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { Session, DayOfWeek } from "@/lib/types";
 import { useScheduleStore } from "@/stores/scheduleStore";
-import { useDragStore } from "@/stores/dragStore";
 import { formatTime, getContrastText, timeToYPos, createDragImage } from "@/lib/utils";
 import { DEFAULT_SESSION_DURATION } from "@/lib/constants";
 
@@ -16,9 +15,7 @@ interface CourseBlockProps {
 const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
   ({ courseId, session, isGrid = false, index = 0 }, ref) => {
     const scheduleStore = useScheduleStore();
-    const course = scheduleStore.getCourse(courseId);
-    if (!course) return null;
-
+    
     // Create session object for bank items that don't have one yet
     const blockSession: Session = session || {
       id: `temp-${courseId}-${index}`,
@@ -28,7 +25,7 @@ const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
       start: 0,
       end: DEFAULT_SESSION_DURATION,
     };
-
+    
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
       id: blockSession.id,
       data: {
@@ -37,7 +34,7 @@ const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
         courseId,
       },
     });
-
+    
     // Set up custom drag image
     useEffect(() => {
       if (isDragging) {
@@ -60,6 +57,9 @@ const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
       }
     }, [isDragging]);
 
+    const course = scheduleStore.getCourse(courseId);
+    if (!course) return null;
+
     // Styling for grid blocks
     const gridStyle = isGrid && session ? {
       position: 'absolute' as const,
@@ -71,7 +71,6 @@ const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
       color: getContrastText(course.color),
       transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
       zIndex: isDragging ? 50 : 1,
-      pointerEvents: 'auto' as const,
     } : {};
     
     // For bank blocks
@@ -82,7 +81,6 @@ const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
       marginBottom: '8px',
       transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
       zIndex: isDragging ? 50 : 1,
-      pointerEvents: 'auto' as const,
     } : {};
 
     return (

@@ -11,6 +11,7 @@ import { useDragStore } from "./stores/dragStore";
 import { useScheduleStore } from "./stores/scheduleStore";
 import { DEFAULT_SESSION_DURATION } from "./lib/constants";
 import { DayOfWeek } from "./lib/types";
+import { yPosToTime, snapToGrid } from "./lib/utils";
 
 const queryClient = new QueryClient();
 
@@ -89,13 +90,19 @@ const AppContent = () => {
         });
 
         if (type === "bank-block") {
-          // Create new session from bank
+          // Determine drop time from live pointer
+          const { pointerY } = useDragStore.getState();
+          const yInside = pointerY ?? 0;
+          const snappedY = snapToGrid(yInside);
+          const startMinutes = yPosToTime(snappedY);
+          const endMinutes   = startMinutes + DEFAULT_SESSION_DURATION;
+        
           createSession(
             session.courseId,
             poolId,
             day,
-            session.start,
-            session.end
+            startMinutes,
+            endMinutes
           );
         }
       }
