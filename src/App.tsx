@@ -13,6 +13,8 @@ import { DEFAULT_SESSION_DURATION } from "./lib/constants";
 import { DayOfWeek } from "./lib/types";
 import { yPosToTime, snapToGrid } from "./lib/utils";
 
+const COLUMN_HEADER_HEIGHT = 32; // px height of .pool-header
+
 const queryClient = new QueryClient();
 
 const AppContent = () => {
@@ -99,7 +101,8 @@ const AppContent = () => {
 
         if (type === "bank-block") {
           // Determine drop time from live pointer
-          const yInside = (pointerY ?? 0) - (dragSession?.offsetY ?? 0);
+          const yInside =
+            (pointerY ?? 0) - (dragSession?.offsetY ?? 0) - COLUMN_HEADER_HEIGHT;
           const snappedY = snapToGrid(yInside);
           const startMinutes = yPosToTime(snappedY);
           const endMinutes   = startMinutes + DEFAULT_SESSION_DURATION;
@@ -114,7 +117,8 @@ const AppContent = () => {
         }
         else if (type === "grid-block") {
           // Move or reschedule an existing session
-          const yInside = (pointerY ?? 0) - (dragSession?.offsetY ?? 0);
+          const yInside =
+            (pointerY ?? 0) - (dragSession?.offsetY ?? 0) - COLUMN_HEADER_HEIGHT;
           const snappedY = snapToGrid(yInside);
           const newStart = yPosToTime(snappedY);
           const duration  = session.end - session.start;
