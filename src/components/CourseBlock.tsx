@@ -1,9 +1,10 @@
-import { forwardRef, useEffect } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { Session, DayOfWeek } from "@/lib/types";
 import { useScheduleStore } from "@/stores/scheduleStore";
 import { formatTime, getContrastText, timeToYPos, createDragImage } from "@/lib/utils";
 import { DEFAULT_SESSION_DURATION } from "@/lib/constants";
+import { snapToGrid, yPosToTime } from "@/lib/utils";
 
 interface CourseBlockProps {
   courseId: string;
@@ -15,6 +16,7 @@ interface CourseBlockProps {
 const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
   ({ courseId, session, isGrid = false, index = 0 }, ref) => {
     const scheduleStore = useScheduleStore();
+    const [isResizing, setIsResizing] = useState(false);
     
     // Create session object for bank items that don't have one yet
     const blockSession: Session = session || {
@@ -83,40 +85,63 @@ const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
       zIndex: isDragging ? 50 : 1,
     } : {};
 
+    const onResizeMouseDown = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!session) return; // only grid blocks
+      setIsResizing(true);
+      const startY = e.clientY;
+      const startEnd = session.end;
+
+      const move = (me: MouseEvent) => {
+        const delta = me.clientY - startY;
+        const tentative = startEnd + delta;
+        const snapped = yPosToTime(snapToGrid(tentative));
+        if (snapped > session.start) {
+          scheduleStore.updateSession(session.id, { end: snapped });
+        }
+      };
+
+      const up = () => {
+        setIsResizing(false);
+        window.removeEventListener("mousemove", move);
+        window.removeEventListener("mouseup", up);
+      };
+
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", up);
+    };
+
     return (
-      <div className="relative">
+      <div
+        className={`course-block-wrapper ${isGrid ? "absolute" : "relative"}`}
+        style={{ ...gridStyle, ...bankStyle }}
+      >
         <div
           ref={(el) => {
             setNodeRef(el);
-            if (typeof ref === "function") {
-              ref(el);
-            } else if (ref) {
-              ref.current = el;
-            }
+            if (typeof ref === "function") ref(el);
+            else if (ref) ref.current = el;
           }}
-          className={`course-block rounded-md cursor-pointer shadow transition-all hover:shadow-lg ${
-            isGrid ? "absolute" : "p-2"
-          } ${isDragging ? "opacity-50" : ""}`}
-          style={{ ...gridStyle, ...bankStyle }}
           {...attributes}
           {...listeners}
-          draggable
+          className={`course-block-body p-2 h-full flex flex-col ${
+            isDragging ? "opacity-50" : ""
+          } cursor-pointer`}
         >
-          <div className="p-2 h-full flex flex-col">
-            <div className="font-medium">{course.title}</div>
-            {isGrid && session && (
-              <div className="text-xs mt-auto">
-                {formatTime(session.start)} - {formatTime(session.end)}
-              </div>
-            )}
-          </div>
-          
+          <div className="font-medium">{course.title}</div>
           {isGrid && session && (
-            <div 
-              className="resize-handle absolute bottom-0 left-0 right-0 h-2 bg-black bg-opacity-20 cursor-ns-resize"
-            />
+            <div className="text-xs mt-auto">
+              {formatTime(session.start)} - {formatTime(session.end)}
+            </div>
           )}
         </div>
+        {isGrid && session && (
+          <div
+            className="absolute bottom-0 left-0 right-0 h-2 bg-black bg-opacity-20 cursor-ns-resize select-none"
+            onMouseDown={onResizeMouseDown}
+          />
+        )}
         <div 
           className="absolute top-1 right-1 z-20 cursor-pointer"
           onClick={(e) => {

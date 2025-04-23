@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { useDroppable, DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { Pool, DayOfWeek } from "@/lib/types";
 import { useScheduleStore } from "@/stores/scheduleStore";
@@ -42,14 +42,20 @@ const PoolCanvas = ({ pool, onDragStart, onDragEnd }: PoolCanvasProps) => {
 
       // Use live pointer position captured during drag
       const { pointerY } = useDragStore.getState();
+      const yInsideCalc = (pointerY ?? 0) - (dragSession?.offsetY ?? 0);
+      console.log("dragEnd – pointerY:", pointerY, "offsetY:", dragSession?.offsetY, "yInside:", yInsideCalc);
       if (pointerY == null) {
         onDragEnd(event);          // fallback – no valid pointer info
         return;
       }
       const dropTimeMinutes = Math.max(
         0,
-        Math.min(900, yPosToTime(pointerY))
-      ); // Ensure within bounds (0‑900 minutes)
+        Math.min(
+          900,
+          yPosToTime(pointerY - (dragSession?.offsetY ?? 0))
+        )
+      ); // Ensure within bounds (0-900 minutes)
+      console.log("dragEnd – dropTimeMinutes:", dropTimeMinutes);
 
       if (type === "bank-block") {
         // Creating new session from bank
@@ -100,7 +106,7 @@ const PoolDayColumn = ({ poolId, day, onDragEnd }: PoolDayColumnProps) => {
   const { getSessionsForPoolDay } = useScheduleStore();
   const { dragSession, endDrag } = useDragStore();
   const sessions = getSessionsForPoolDay(poolId, day);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const blockAreaRef = useRef<HTMLDivElement>(null);
   const [mouseY, setMouseY] = useState<number | null>(null);
   
   const { setNodeRef, isOver } = useDroppable({
@@ -112,22 +118,26 @@ const PoolDayColumn = ({ poolId, day, onDragEnd }: PoolDayColumnProps) => {
     },
   });
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (containerRef.current && dragSession) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const relativeY = e.clientY - rect.top;
-      setMouseY(relativeY);
-      // keep global drag state in sync
-      useDragStore.getState().setPointerY(relativeY);
-    }
-  };
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (blockAreaRef.current && dragSession) {
+        const rect = blockAreaRef.current.getBoundingClientRect();
+        const relativeY = e.clientY - rect.top;
+        setMouseY(relativeY);
+        console.log("mousemove – relativeY:", relativeY);
+        // keep global drag state in sync
+        useDragStore.getState().setPointerY(relativeY);
+      }
+    },
+    [dragSession]
+  );
 
   useEffect(() => {
     if (isOver && dragSession) {
-      window.addEventListener('mousemove', handleMouseMove);
-      return () => window.removeEventListener('mousemove', handleMouseMove);
+      window.addEventListener("mousemove", handleMouseMove);
+      return () => window.removeEventListener("mousemove", handleMouseMove);
     }
-  }, [isOver, dragSession]);
+  }, [isOver, dragSession, handleMouseMove]);
 
   useEffect(() => {
     if (!isOver) {
@@ -142,16 +152,13 @@ const PoolDayColumn = ({ poolId, day, onDragEnd }: PoolDayColumnProps) => {
 
   return (
     <div 
-      ref={(el) => {
-        setNodeRef(el);
-        if (el) containerRef.current = el;
-      }}
+      ref={setNodeRef}
       className={`pool-day relative border-r last:border-r-0 w-48 min-w-48 ${isOver ? 'bg-gray-50' : ''}`}
     >
       <div className="pool-header sticky top-0 bg-gray-100 p-2 text-center font-medium">
         {day}
       </div>
-      <div className="relative h-full" style={{ minHeight: '900px' }}>
+      <div className="relative h-full" style={{ minHeight: '900px'}} ref={blockAreaRef}>
         {sessions.map((session) => (
           <CourseBlock
             key={session.id}

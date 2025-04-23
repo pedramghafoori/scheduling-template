@@ -38,7 +38,7 @@ export const yPosToTime = (yPos: number, offsetY: number = 0): number => {
 
 export const snapToGrid = (minutes: number): number => {
   // Snap to 15-minute intervals
-  return Math.round(minutes / 15) * 15;
+  return Math.floor(minutes / 15) * 15;
 };
 
 export const createDragImage = (): HTMLImageElement => {
