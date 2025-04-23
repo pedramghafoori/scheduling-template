@@ -1,168 +1,140 @@
-import { Course, Session, GridConfig } from '@/types/schedule';
-import { cn, formatTime, isLightColor } from '@/lib/utils';
-import { CourseMenu } from './CourseMenu';
-import { useRef, useState, useEffect } from 'react';
+import { forwardRef, useRef, useEffect } from "react";
+import { useDraggable } from "@dnd-kit/core";
+import { Session, DayOfWeek } from "@/lib/types";
+import { useScheduleStore } from "@/stores/scheduleStore";
+import { useDragStore } from "@/stores/dragStore";
+import { formatTime, getContrastText, timeToYPos, createDragImage } from "@/lib/utils";
+import { DEFAULT_SESSION_DURATION } from "@/lib/constants";
 
 interface CourseBlockProps {
-  session: Session & { course: Course };
-  style?: React.CSSProperties;
-  onDelete: () => void;
-  gridConfig: GridConfig;
-  onResize: (newEnd: string) => void;
-  onDragStart: (event: React.DragEvent<HTMLDivElement>, session: Session) => void;
-  onDragEnd: () => void;
-  draggable?: boolean;
+  courseId: string;
+  session?: Session;
+  isGrid?: boolean;
+  index?: number;
 }
 
-export function CourseBlock({
-  session,
-  style,
-  onDelete,
-  gridConfig,
-  onResize,
-  onDragStart,
-  onDragEnd,
-  draggable
-}: CourseBlockProps) {
-  const [isResizing, setIsResizing] = useState(false);
-  const [startResizeY, setStartResizeY] = useState(0);
-  const [startHeight, setStartHeight] = useState(0);
-  const [initialEndTime, setInitialEndTime] = useState('');
-  const blockRef = useRef<HTMLDivElement>(null);
+const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
+  ({ courseId, session, isGrid = false, index = 0 }, ref) => {
+    const scheduleStore = useScheduleStore();
+    const course = scheduleStore.getCourse(courseId);
+    if (!course) return null;
 
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onDelete();
-  };
+    // Create session object for bank items that don't have one yet
+    const blockSession: Session = session || {
+      id: `temp-${courseId}-${index}`,
+      courseId,
+      poolId: "", // Empty string means it's in the bank
+      day: "Monday" as DayOfWeek, // Default day
+      start: 0,
+      end: DEFAULT_SESSION_DURATION,
+    };
 
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    onDragStart(e, session);
-  };
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+      id: blockSession.id,
+      data: {
+        type: isGrid ? "grid-block" : "bank-block",
+        session: blockSession,
+        courseId,
+      },
+    });
 
-  const handleResizeStart = (e: React.MouseEvent) => {
-    if (!onResize || !blockRef.current) return;
-    e.preventDefault();
-    e.stopPropagation();
+    // Set up custom drag image
+    useEffect(() => {
+      if (isDragging) {
+        const dragImg = createDragImage();
+        document.body.appendChild(dragImg);
+        dragImg.classList.add("hidden"); // Make invisible
+        
+        if ("setDragImage" in window.DataTransfer.prototype) {
+          // This will be ignored in some browsers, but we handle it with dnd-kit anyway
+          const event = new DragEvent("dragstart");
+          Object.defineProperty(event, "dataTransfer", {
+            value: { setDragImage: () => {} },
+            writable: true,
+          });
+        }
+        
+        return () => {
+          document.body.removeChild(dragImg);
+        };
+      }
+    }, [isDragging]);
+
+    // Styling for grid blocks
+    const gridStyle = isGrid && session ? {
+      position: 'absolute' as const,
+      top: `${timeToYPos(session.start)}px`,
+      height: `${session.end - session.start}px`,
+      width: 'calc(100% - 8px)',
+      left: '4px',
+      backgroundColor: course.color,
+      color: getContrastText(course.color),
+      transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+      zIndex: isDragging ? 50 : 1,
+      pointerEvents: 'auto' as const,
+    } : {};
     
-    setStartResizeY(e.clientY);
-    setStartHeight(blockRef.current.offsetHeight);
-    setInitialEndTime(session.end);
-    setIsResizing(true);
-  };
+    // For bank blocks
+    const bankStyle = !isGrid ? {
+      backgroundColor: course.color,
+      color: getContrastText(course.color),
+      height: '60px', // 1 hour height
+      marginBottom: '8px',
+      transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+      zIndex: isDragging ? 50 : 1,
+      pointerEvents: 'auto' as const,
+    } : {};
 
-  useEffect(() => {
-    if (!isResizing) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!onResize || !blockRef.current) return;
-
-      // Calculate the change in height
-      const deltaY = e.clientY - startResizeY;
-      const hourHeight = 60; // 1 hour = 60px
-      
-      // Calculate new height ensuring it doesn't go below minimum
-      const minHeight = 30; // Minimum 30px height (30 minutes)
-      const newHeight = Math.max(minHeight, startHeight + deltaY);
-      
-      // Convert height change to minutes
-      const heightDiffInMinutes = Math.round((newHeight - startHeight) / hourHeight * 60);
-      
-      // Parse initial end time
-      const [endHour, endMinute] = initialEndTime.split(':').map(Number);
-      const initialEndMinutes = endHour * 60 + endMinute;
-      
-      // Calculate new end time in minutes
-      const newEndMinutes = initialEndMinutes + heightDiffInMinutes;
-      
-      // Ensure new end time doesn't exceed grid bounds
-      const maxEndMinutes = gridConfig.endHour * 60;
-      const [startHour, startMinute] = session.start.split(':').map(Number);
-      const startMinutes = startHour * 60 + startMinute;
-      
-      // Bound the end time between start time + 15 minutes and grid end
-      const boundedEndMinutes = Math.min(
-        maxEndMinutes,
-        Math.max(
-          startMinutes + gridConfig.stepMinutes,
-          newEndMinutes
-        )
-      );
-      
-      // Convert back to HH:mm format
-      const finalHours = Math.floor(boundedEndMinutes / 60);
-      const finalMinutes = boundedEndMinutes % 60;
-      const newEnd = `${finalHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
-      
-      onResize(newEnd);
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      setStartResizeY(0);
-      setStartHeight(0);
-      setInitialEndTime('');
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing, startResizeY, startHeight, initialEndTime, onResize, gridConfig, session]);
-
-  const backgroundColor = session.course.color || '#3B82F6';
-  const isLight = isLightColor(backgroundColor);
-  
-  const finalStyle: React.CSSProperties = {
-    ...style,
-    backgroundColor,
-    cursor: isResizing ? 'ns-resize' : 'move',
-    userSelect: 'none',
-    transition: isResizing ? 'none' : 'opacity 0.2s ease-in-out',
-    color: isLight ? '#000000' : '#FFFFFF'
-  };
-
-  return (
-    <div
-      ref={blockRef}
-      onDragStart={handleDragStart}
-      onDragEnd={onDragEnd}
-      draggable={draggable}
-      className="relative group rounded-lg shadow-sm"
-      style={finalStyle}
-    >
-      <div className="p-2">
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className="font-medium text-sm">{session.course.title}</h3>
-            <p className={`text-xs ${isLight ? 'text-black/70' : 'text-white/70'}`}>
-              {`${session.start} - ${session.end}`}
-            </p>
-          </div>
-          <button
-            onClick={handleDelete}
-            className={cn(
-              "opacity-0 group-hover:opacity-100 transition-opacity",
-              isLight ? "text-black/60 hover:text-red-600" : "text-white/60 hover:text-red-200"
+    return (
+      <div className="relative">
+        <div
+          ref={(el) => {
+            setNodeRef(el);
+            if (typeof ref === "function") {
+              ref(el);
+            } else if (ref) {
+              ref.current = el;
+            }
+          }}
+          className={`course-block rounded-md cursor-pointer shadow transition-all hover:shadow-lg ${
+            isGrid ? "absolute" : "p-2"
+          } ${isDragging ? "opacity-50" : ""}`}
+          style={{ ...gridStyle, ...bankStyle }}
+          {...attributes}
+          {...listeners}
+          draggable
+        >
+          <div className="p-2 h-full flex flex-col">
+            <div className="font-medium">{course.title}</div>
+            {isGrid && session && (
+              <div className="text-xs mt-auto">
+                {formatTime(session.start)} - {formatTime(session.end)}
+              </div>
             )}
-            aria-label="Delete course"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          </div>
+          
+          {isGrid && session && (
+            <div 
+              className="resize-handle absolute bottom-0 left-0 right-0 h-2 bg-black bg-opacity-20 cursor-ns-resize"
+            />
+          )}
+        </div>
+        <div 
+          className="absolute top-1 right-1 z-20 cursor-pointer"
+          onClick={(e) => {
+            console.log('Delete button clicked for course:', courseId);
+            e.stopPropagation();
+            scheduleStore.removeCourse(courseId);
+            console.log('Course removed:', courseId);
+          }}
+        >
+          <span className="text-white hover:text-gray-200 text-xl font-bold">×</span>
         </div>
       </div>
-      <div
-        className={cn(
-          "absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-opacity-30",
-          isLight ? "bg-black/10 hover:bg-black/20" : "bg-white/10 hover:bg-white/20"
-        )}
-        onMouseDown={handleResizeStart}
-      />
-    </div>
-  );
-} 
+    );
+  }
+);
+
+CourseBlock.displayName = "CourseBlock";
+
+export default CourseBlock;
