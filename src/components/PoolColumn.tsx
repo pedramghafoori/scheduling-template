@@ -4,25 +4,27 @@ import { calculateHeight, calculateTop } from '@/lib/utils';
 
 interface PoolColumnProps {
   pool: Pool;
+  sessions: (Session & { course: Course })[];
   courses: Course[];
-  sessions: Session[];
   gridConfig: GridConfig;
-  onDeleteSession: (id: string) => void;
+  onDeleteSession: (sessionId: string) => void;
   onResize: (sessionId: string, newEnd: string) => void;
   onSessionClick: (session: Session) => void;
   onGridClick: (event: React.MouseEvent, poolDayId: string) => void;
+  onGridDoubleClick: (event: React.MouseEvent, poolDayId: string) => void;
   activeSessionId?: string;
 }
 
 export function PoolColumn({
   pool,
-  courses,
   sessions,
+  courses,
   gridConfig,
   onDeleteSession,
   onResize,
   onSessionClick,
   onGridClick,
+  onGridDoubleClick,
   activeSessionId
 }: PoolColumnProps) {
   // Generate array of hours for grid lines
@@ -37,6 +39,7 @@ export function PoolColumn({
         <div
           key={day.id}
           onClick={(e) => onGridClick(e, day.id)}
+          onDoubleClick={(e) => onGridDoubleClick(e, day.id)}
           className="flex-1 relative border-r last:border-r-0"
         >
           {/* Hour grid lines */}

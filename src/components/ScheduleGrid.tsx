@@ -16,7 +16,7 @@ interface ScheduleGridProps {
 
 const defaultGridConfig: GridConfig = {
   startHour: 8,
-  endHour: 21,
+  endHour: 22,
   stepMinutes: 15
 };
 
@@ -29,24 +29,24 @@ export function ScheduleGrid({
   onDeleteSession
 }: ScheduleGridProps) {
   const [activeSession, setActiveSession] = useState<Session | null>(null);
+  const [showAddPopup, setShowAddPopup] = useState<{ x: number; y: number; poolDayId: string } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const handleSessionClick = (session: Session) => {
-    setActiveSession(activeSession?.id === session.id ? null : session);
+    // Toggle active session
+    if (activeSession?.id === session.id) {
+      setActiveSession(null);
+    } else {
+      setActiveSession(session);
+    }
+    setShowAddPopup(null); // Close popup when selecting a session
   };
 
-  const handleGridClick = (event: React.MouseEvent, poolDayId: string) => {
-    if (!activeSession || !gridRef.current) return;
+  const handleGridDoubleClick = (event: React.MouseEvent, poolDayId: string) => {
+    if (!gridRef.current || activeSession) return; // Don't show popup if we're moving a session
 
     const gridRect = gridRef.current.getBoundingClientRect();
     const relativeY = event.clientY - gridRect.top;
-    
-    console.log('Click Position:', {
-      clientY: event.clientY,
-      gridTop: gridRect.top,
-      relativeY,
-      gridHeight: gridRect.height
-    });
     
     // Calculate clicked time
     const totalGridHeight = gridRect.height;
@@ -58,15 +58,38 @@ export function ScheduleGrid({
     const absoluteHour = defaultGridConfig.startHour + Math.floor(clickedHours);
     const minutes = Math.floor((clickedHours % 1) * 60 / defaultGridConfig.stepMinutes) * defaultGridConfig.stepMinutes;
     
-    console.log('Time Calculations:', {
-      totalGridHeight,
-      hoursInGrid,
-      pixelsPerHour,
-      clickedHours,
-      absoluteHour,
-      minutes,
-      adjustedRelativeY: relativeY
+    // Show popup for course selection
+    setShowAddPopup({
+      x: event.clientX,
+      y: event.clientY,
+      poolDayId
     });
+  };
+
+  const handleGridClick = (event: React.MouseEvent, poolDayId: string) => {
+    // Close add popup if clicking elsewhere
+    if (showAddPopup) {
+      setShowAddPopup(null);
+      return;
+    }
+
+    // If no active session or same pool day, do nothing
+    if (!activeSession || !gridRef.current) {
+      return;
+    }
+
+    const gridRect = gridRef.current.getBoundingClientRect();
+    const relativeY = event.clientY - gridRect.top;
+    
+    // Calculate clicked time
+    const totalGridHeight = gridRect.height;
+    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour;
+    const pixelsPerHour = totalGridHeight / hoursInGrid;
+    
+    // Calculate hours and minutes from click position
+    const clickedHours = relativeY / pixelsPerHour;
+    const absoluteHour = defaultGridConfig.startHour + Math.floor(clickedHours);
+    const minutes = Math.floor((clickedHours % 1) * 60 / defaultGridConfig.stepMinutes) * defaultGridConfig.stepMinutes;
     
     // Calculate session duration
     const [startHour, startMinute] = activeSession.start.split(':').map(Number);
@@ -76,14 +99,6 @@ export function ScheduleGrid({
     // Calculate new start and end times
     const newStartMinutes = absoluteHour * 60 + minutes;
     const newEndMinutes = newStartMinutes + sessionDuration;
-    
-    console.log('Session Times:', {
-      originalStart: `${startHour}:${startMinute}`,
-      originalEnd: `${endHour}:${endMinute}`,
-      sessionDuration,
-      newStartMinutes,
-      newEndMinutes
-    });
     
     // Ensure times are within grid bounds
     const finalStartMinutes = Math.max(
@@ -95,17 +110,33 @@ export function ScheduleGrid({
     // Convert to time format
     const newStart = minutesToTime(finalStartMinutes);
     const newEnd = minutesToTime(finalEndMinutes);
-    
-    console.log('Final Times:', {
-      newStart,
-      newEnd,
-      boundedStartMinutes: finalStartMinutes,
-      boundedEndMinutes: finalEndMinutes
-    });
-    
-    // Update session position
+
+    // Move the session to the new pool day and position
     onSessionDragEnd(activeSession.id, poolDayId, newStart, newEnd);
-    setActiveSession(null);
+    setActiveSession(null); // Clear active session after moving
+  };
+
+  const handleAddCourse = (courseId: string) => {
+    if (!showAddPopup || !gridRef.current) return;
+
+    const gridRect = gridRef.current.getBoundingClientRect();
+    const relativeY = showAddPopup.y - gridRect.top;
+    
+    // Calculate clicked time
+    const totalGridHeight = gridRect.height;
+    const hoursInGrid = defaultGridConfig.endHour - defaultGridConfig.startHour;
+    const pixelsPerHour = totalGridHeight / hoursInGrid;
+    
+    // Calculate hours and minutes from click position
+    const clickedHours = relativeY / pixelsPerHour;
+    const absoluteHour = defaultGridConfig.startHour + Math.floor(clickedHours);
+    const minutes = Math.floor((clickedHours % 1) * 60 / defaultGridConfig.stepMinutes) * defaultGridConfig.stepMinutes;
+    
+    const startTime = minutesToTime(absoluteHour * 60 + minutes);
+    const endTime = minutesToTime((absoluteHour * 60 + minutes) + 60); // Default 1 hour duration
+
+    onAddSession(courseId, showAddPopup.poolDayId, startTime, endTime);
+    setShowAddPopup(null);
   };
 
   const handleResize = (sessionId: string, newEnd: string) => {
@@ -122,57 +153,60 @@ export function ScheduleGrid({
   };
 
   return (
-    <div className="flex flex-col border rounded-lg bg-white shadow-sm">
-      {/* Pool title */}
-      <div className="font-bold p-2 text-center bg-gray-50 border-b">
-        {pools[0]?.title}
-      </div>
-
-      {/* Day headers */}
-      <div className="flex border-b">
-        <div className="w-12" /> {/* Spacer for hour labels */}
-        {pools[0]?.days.map(day => (
-          <div key={day.id} className="flex-1 font-medium p-2 text-center">
-            {day.day.charAt(0).toUpperCase() + day.day.slice(1)}
-          </div>
-        ))}
-      </div>
-
-      {/* Grid content */}
-      <div
-        ref={gridRef}
-        className="flex"
-        style={{
-          height: `${(defaultGridConfig.endHour - defaultGridConfig.startHour) * 60}px`,
-        }}
-      >
+    <div className="relative">
+      <div ref={gridRef} className="flex min-h-[840px]">
         <HourLabels gridConfig={defaultGridConfig} />
-        
-        {pools.map(pool => {
-          const poolSessions = sessions.filter(s => {
-            if (!pool.days.some(d => d.id === s.poolDayId)) return false;
-            return courses.some(c => c.id === s.courseId);
-          }).map(s => ({
-            ...s,
-            course: courses.find(c => c.id === s.courseId)!
-          }));
-
-          return (
+        <div className="flex-1 flex">
+          {pools.map(pool => (
             <PoolColumn
               key={pool.id}
               pool={pool}
-              sessions={poolSessions}
+              sessions={sessions
+                .filter(session => pool.days.some(day => day.id === session.poolDayId))
+                .map(session => ({
+                  ...session,
+                  course: courses.find(c => c.id === session.courseId)!
+                }))}
               courses={courses}
               gridConfig={defaultGridConfig}
               onDeleteSession={onDeleteSession}
               onResize={handleResize}
               onSessionClick={handleSessionClick}
               onGridClick={handleGridClick}
+              onGridDoubleClick={handleGridDoubleClick}
               activeSessionId={activeSession?.id}
             />
-          );
-        })}
+          ))}
+        </div>
       </div>
+      {showAddPopup && (
+        <div
+          className="absolute bg-white shadow-lg rounded-lg p-4 z-50"
+          style={{
+            left: showAddPopup.x,
+            top: showAddPopup.y,
+            transform: 'translate(-50%, -50%)'
+          }}
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {courses.map(course => (
+              <button
+                key={course.id}
+                onClick={() => handleAddCourse(course.id)}
+                className="px-3 py-2 text-sm bg-blue-50 hover:bg-blue-100 rounded"
+                style={{ borderLeftColor: course.color || '#3B82F6' }}
+              >
+                {course.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {activeSession && (
+        <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
+          Click anywhere in the grid to move the selected session
+        </div>
+      )}
     </div>
   );
 } 
