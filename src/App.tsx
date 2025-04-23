@@ -17,7 +17,7 @@ const queryClient = new QueryClient();
 
 const AppContent = () => {
   const { startDrag, endDrag } = useDragStore();
-  const { deleteSession, createSession } = useScheduleStore();
+  const { deleteSession, createSession, updateSession } = useScheduleStore();
 
   const handleDragStart = (event: DragStartEvent) => {
     console.log('App handleDragStart - Full event:', {
@@ -41,10 +41,16 @@ const AppContent = () => {
       };
       
       console.log("Creating temp session for bank block:", tempSession);
-      startDrag(tempSession, 30); // Assume middle of the block (60px/2)
+      const activatorY = (event.activatorEvent as MouseEvent).clientY;
+      const blockTop = active.rect.current?.initial?.top ?? 0;
+      const offsetY = activatorY - blockTop;
+      startDrag(tempSession, offsetY);
     } else if (type === "grid-block" && session) {
       console.log("Starting drag for grid block:", session);
-      startDrag(session, 30); // This can be refined to get actual offset
+      const activatorY = (event.activatorEvent as MouseEvent).clientY;
+      const blockTop = active.rect.current?.initial?.top ?? 0;
+      const offsetY = activatorY - blockTop;
+      startDrag(session, offsetY);
     }
   };
 
@@ -89,10 +95,11 @@ const AppContent = () => {
           oldDay: session.day
         });
 
+        const { pointerY, dragSession } = useDragStore.getState();
+
         if (type === "bank-block") {
           // Determine drop time from live pointer
-          const { pointerY } = useDragStore.getState();
-          const yInside = pointerY ?? 0;
+          const yInside = (pointerY ?? 0) - (dragSession?.offsetY ?? 0);
           const snappedY = snapToGrid(yInside);
           const startMinutes = yPosToTime(snappedY);
           const endMinutes   = startMinutes + DEFAULT_SESSION_DURATION;
@@ -104,6 +111,21 @@ const AppContent = () => {
             startMinutes,
             endMinutes
           );
+        }
+        else if (type === "grid-block") {
+          // Move or reschedule an existing session
+          const yInside = (pointerY ?? 0) - (dragSession?.offsetY ?? 0);
+          const snappedY = snapToGrid(yInside);
+          const newStart = yPosToTime(snappedY);
+          const duration  = session.end - session.start;
+          const newEnd   = newStart + duration;
+
+          updateSession(session.id, {
+            poolId,
+            day,
+            start: newStart,
+            end: newEnd,
+          });
         }
       }
     }
