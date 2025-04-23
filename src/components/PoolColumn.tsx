@@ -25,6 +25,12 @@ export function PoolColumn({
   onGridClick,
   activeSessionId
 }: PoolColumnProps) {
+  // Generate array of hours for grid lines
+  const hours = Array.from(
+    { length: gridConfig.endHour - gridConfig.startHour },
+    (_, i) => gridConfig.startHour + i
+  );
+
   return (
     <div className="flex-1 flex">
       {pool.days.map(day => (
@@ -33,6 +39,20 @@ export function PoolColumn({
           onClick={(e) => onGridClick(e, day.id)}
           className="flex-1 relative border-r last:border-r-0"
         >
+          {/* Hour grid lines */}
+          {hours.map(hour => (
+            <div
+              key={hour}
+              className="absolute w-full border-t border-dotted border-gray-200"
+              style={{
+                top: `${(hour - gridConfig.startHour) * 60}px`,
+                left: 0,
+                right: 0,
+                pointerEvents: 'none' // Ensure lines don't interfere with clicks
+              }}
+            />
+          ))}
+          
           {sessions
             .filter(session => session.poolDayId === day.id)
             .map(session => {
@@ -51,7 +71,8 @@ export function PoolColumn({
                     top: `${top}px`,
                     position: 'absolute',
                     width: 'calc(100% - 8px)',
-                    left: '4px'
+                    left: '4px',
+                    zIndex: 1 // Ensure course blocks appear above grid lines
                   }}
                   onDelete={() => onDeleteSession(session.id)}
                   gridConfig={gridConfig}
