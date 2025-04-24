@@ -5,11 +5,10 @@ import HourLabels from "./HourLabels";
 import PoolCanvas from "./PoolCanvas";
 import { DEFAULT_SESSION_DURATION } from "@/lib/constants";
 import { createDragImage } from "@/lib/utils";
-import { DayOfWeek } from "@/lib/types";
+import { DayOfWeek, Pool } from "@/lib/types";
 import { clientYToMinutes } from "@/lib/position";
 import { DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Pool } from "@/types";
 
 const PoolWrapper = ({ pool, children }: { pool: Pool, children: React.ReactNode }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -25,7 +24,7 @@ const PoolWrapper = ({ pool, children }: { pool: Pool, children: React.ReactNode
   return (
     <div 
       ref={setNodeRef}
-      className="relative mb-4 last:mb-0 bg-white"
+      className="relative"
       style={style}
     >
       <div 
@@ -51,6 +50,14 @@ const DroppableSlot = ({ id, children }: { id: string, children: React.ReactNode
       {children}
     </div>
   );
+};
+
+const isPool = (obj: any): obj is Pool => {
+  return obj && 
+    typeof obj.title === 'string' && 
+    typeof obj.location === 'string' && 
+    Array.isArray(obj.days) &&
+    typeof obj.id === 'string';
 };
 
 const ScheduleGrid = () => {
@@ -146,23 +153,26 @@ const ScheduleGrid = () => {
   return (
     <div className="flex-1 overflow-x-auto">
       <div className="flex min-w-full">
-        <div className="sticky left-0 z-10 bg-white">
-          <HourLabels />
-        </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col">
           {pools.map((pool) => (
-            <DroppableSlot key={pool.id} id={pool.id}>
-              <PoolWrapper pool={pool}>
-                <PoolCanvas pool={pool} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />
-              </PoolWrapper>
-            </DroppableSlot>
+            <div key={pool.id} className="w-full rounded-lg shadow-sm mb-4 last:mb-0 p-5 border border-black">
+              <DroppableSlot id={pool.id}>
+                <PoolWrapper pool={pool}>
+                  <PoolCanvas 
+                    pool={pool}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                  />
+                </PoolWrapper>
+              </DroppableSlot>
+            </div>
           ))}
         </div>
       </div>
-      {dragSession?.type === 'pool' && dragSession.data && (
+      {dragSession && isPool(dragSession) && (
         <DragOverlay>
           <div className="opacity-50 bg-white">
-            <PoolCanvas pool={dragSession.data} />
+            <PoolCanvas pool={dragSession} />
           </div>
         </DragOverlay>
       )}

@@ -8,7 +8,7 @@ const Index = () => {
     <Layout>
       <CourseBank />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="bg-white border-b p-3 flex justify-between items-center">
+        <div className="bg-white p-3 flex justify-between items-center">
           <h2 className="text-lg font-bold">Schedule</h2>
           <AddPoolModal />
         </div>

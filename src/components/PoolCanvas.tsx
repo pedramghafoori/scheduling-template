@@ -4,9 +4,13 @@ import { Pool, DayOfWeek } from "@/lib/types";
 import { useScheduleStore } from "@/stores/scheduleStore";
 import { useDragStore } from "@/stores/dragStore";
 import CourseBlock from "./CourseBlock";
+import { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
+import HourLabels from "./HourLabels";
 
 interface PoolCanvasProps {
   pool: Pool;
+  onDragStart?: (event: DragStartEvent) => void;
+  onDragEnd?: (event: DragEndEvent) => void;
 }
 
 const PoolCanvas = ({ pool }: PoolCanvasProps) => {
@@ -14,8 +18,8 @@ const PoolCanvas = ({ pool }: PoolCanvasProps) => {
   const { removePool } = useScheduleStore();
 
   return (
-    <div className="flex-1 flex flex-col pl-8">
-      <div className="bg-white border-b p-2 flex justify-between items-center">
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="bg-white border-b p-2 flex justify-between items-center pl-8">
         <div className="flex items-center space-x-4 min-w-0">
           <div className="font-medium truncate">{pool.title}</div>
           <div className="text-sm text-gray-500 truncate">{pool.location}</div>
@@ -32,17 +36,22 @@ const PoolCanvas = ({ pool }: PoolCanvasProps) => {
           ×
         </button>
       </div>
-      <div className="flex-1 grid" style={{ 
-        gridTemplateColumns: `repeat(${pool.days.length}, minmax(0, 1fr))`,
-        width: '100%'
-      }}>
-        {pool.days.map((poolDay) => (
-          <PoolDayColumn 
-            key={poolDay.id} 
-            poolId={pool.id}
-            day={poolDay.day}
-          />
-        ))}
+      <div className="flex flex-1">
+        <div className="sticky left-0 z-10 bg-white">
+          <HourLabels />
+        </div>
+        <div className="flex-1 grid" style={{ 
+          gridTemplateColumns: `repeat(${pool.days.length}, minmax(0, 1fr))`,
+          width: '100%'
+        }}>
+          {pool.days.map((poolDay) => (
+            <PoolDayColumn 
+              key={poolDay.id} 
+              poolId={pool.id}
+              day={poolDay.day}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
