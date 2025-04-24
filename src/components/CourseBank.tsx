@@ -33,7 +33,7 @@ const CourseBank = () => {
   return (
     <div 
       ref={setNodeRef}
-      className={`w-64 border-r bg-sidebar flex flex-col h-screen overflow-hidden ${isOver ? 'bg-red-50' : ''}`}
+      className={`w-64 border-r bg-sidebar flex flex-col sticky top-0 h-screen ${isOver ? 'bg-red-50' : ''}`}
     >
       <div className="p-4 border-b bg-white">
         <h2 className="font-bold text-lg">Course Bank</h2>
