@@ -11,6 +11,8 @@ interface ScheduleState {
   
   // Actions
   addPool: (title: string, location: string, days: DayOfWeek[]) => void;
+  removePool: (poolId: string) => void;
+  reorderPools: (activeId: string, overId: string) => void;
   addCourse: (title: string, totalHours: number) => void;
   createSession: (courseId: string, poolId: string, day: DayOfWeek, start: number, end: number) => string;
   updateSession: (id: string, updates: Partial<Session>) => void;
@@ -82,6 +84,28 @@ export const useScheduleStore = create<ScheduleState>()(
             },
           ],
         }));
+      },
+
+      removePool: (poolId) => {
+        set((state) => ({
+          pools: state.pools.filter((pool) => pool.id !== poolId),
+          sessions: state.sessions.filter((session) => session.poolId !== poolId),
+        }));
+      },
+
+      reorderPools: (activeId, overId) => {
+        set((state) => {
+          const oldIndex = state.pools.findIndex((pool) => pool.id === activeId);
+          const newIndex = state.pools.findIndex((pool) => pool.id === overId);
+
+          if (oldIndex === -1 || newIndex === -1) return state;
+
+          const newPools = [...state.pools];
+          const [movedPool] = newPools.splice(oldIndex, 1);
+          newPools.splice(newIndex, 0, movedPool);
+
+          return { ...state, pools: newPools };
+        });
       },
 
       addCourse: (title, totalHours) => {

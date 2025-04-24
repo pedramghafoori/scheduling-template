@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { DndContext, pointerWithin, DragStartEvent, DragEndEvent } from "@dnd-kit/core";
+import { DndContext, DragStartEvent, DragEndEvent, pointerWithin } from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { useDragStore } from "@/stores/dragStore";
 import { useScheduleStore } from "@/stores/scheduleStore";
 import { DayOfWeek } from "@/lib/types";
@@ -13,13 +14,13 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const { startDrag, endDrag, pointerY } = useDragStore();
-  const { createSession, updateSession, deleteSession } = useScheduleStore();
+  const { createSession, updateSession, deleteSession, reorderPools } = useScheduleStore();
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    const { session, courseId, type } = active.data.current || {};
+    const { session, courseId, type, pool } = active.data.current || {};
 
-    console.log("Layout handleDragStart:", { type, courseId, session });
+    console.log("Layout handleDragStart:", { type, courseId, session, pool });
 
     if (type === "bank-block" && courseId) {
       const tempSession = {
@@ -53,58 +54,60 @@ const Layout = ({ children }: LayoutProps) => {
     }
 
     const dragData = active.data.current;
+    const overData = over.data.current;
 
-    // 1) Dropped onto the Course Bank → delete
-    if (over.id === "course-bank" && dragData?.type === "grid-block") {
-      const session = dragData.session;
-      if (session?.id) {
-        console.log("Deleting session dropped on bank:", session.id);
-        deleteSession(session.id);
-      }
+    // Handle pool reordering
+    if (dragData?.type === "pool" && overData?.type === "pool-slot") {
+      reorderPools(active.id as string, over.id as string);
       endDrag();
       return;
     }
 
-    // 2) Dropped onto a pool/day column
-    if (over.data.current?.type === "pool-day") {
-      const { poolId, day } = over.data.current;
-      const start = clientYToMinutes(pointerY ?? 0);
-
-      if (dragData?.type === "bank-block") {
-        console.log("Creating session from bank‑block:", {
-          courseId: dragData.courseId,
-          poolId,
-          day,
-          start,
-          end: start + DEFAULT_SESSION_DURATION
-        });
-        
-        // Create a new session with the correct data
-        const newSessionId = createSession(
-          dragData.courseId,
-          poolId,
-          day,
-          start,
-          start + DEFAULT_SESSION_DURATION
-        );
-        
-        console.log("Created new session:", newSessionId);
-      } else if (dragData?.type === "grid-block") {
-        const { session } = dragData;
-        const duration = session.end - session.start;
-        console.log("Moving grid‑block", { sessionId: session.id, start });
-        updateSession(session.id, {
-          poolId,
-          day,
-          start,
-          end: start + duration,
-        });
+    // Handle course dragging
+    if (dragData?.type === "grid-block" || dragData?.type === "bank-block") {
+      // 1) Dropped onto the Course Bank → delete
+      if (over.id === "course-bank" && dragData?.type === "grid-block") {
+        const session = dragData.session;
+        if (session?.id) {
+          console.log("Deleting session dropped on bank:", session.id);
+          deleteSession(session.id);
+        }
       }
-      endDrag();
-      return;
+      // 2) Dropped onto a pool/day column
+      else if (overData?.type === "pool-day") {
+        const { poolId, day } = overData;
+        const start = clientYToMinutes(pointerY ?? 0);
+
+        if (dragData?.type === "bank-block") {
+          console.log("Creating session from bank‑block:", {
+            courseId: dragData.courseId,
+            poolId,
+            day,
+            start,
+            end: start + DEFAULT_SESSION_DURATION
+          });
+          
+          createSession(
+            dragData.courseId,
+            poolId,
+            day,
+            start,
+            start + DEFAULT_SESSION_DURATION
+          );
+        } else if (dragData?.type === "grid-block") {
+          const { session } = dragData;
+          const duration = session.end - session.start;
+          console.log("Moving grid‑block", { sessionId: session.id, start });
+          updateSession(session.id, {
+            poolId,
+            day,
+            start,
+            end: start + duration,
+          });
+        }
+      }
     }
 
-    // 3) Any other drop target → just end
     endDrag();
   };
 

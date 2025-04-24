@@ -11,16 +11,39 @@ interface PoolCanvasProps {
 
 const PoolCanvas = ({ pool }: PoolCanvasProps) => {
   const { dragSession } = useDragStore();
+  const { removePool } = useScheduleStore();
 
   return (
-    <div className="flex-1 flex overflow-x-auto">
-      {pool.days.map((poolDay) => (
-        <PoolDayColumn 
-          key={poolDay.id} 
-          poolId={pool.id}
-          day={poolDay.day}
-        />
-      ))}
+    <div className="flex-1 flex flex-col pl-8">
+      <div className="bg-white border-b p-2 flex justify-between items-center">
+        <div className="flex items-center space-x-4 min-w-0">
+          <div className="font-medium truncate">{pool.title}</div>
+          <div className="text-sm text-gray-500 truncate">{pool.location}</div>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm(`Are you sure you want to delete the pool "${pool.title}"? This will also remove all sessions in this pool.`)) {
+              removePool(pool.id);
+            }
+          }}
+          className="text-red-500 hover:text-red-700 ml-2 flex-shrink-0"
+        >
+          ×
+        </button>
+      </div>
+      <div className="flex-1 grid" style={{ 
+        gridTemplateColumns: `repeat(${pool.days.length}, minmax(0, 1fr))`,
+        width: '100%'
+      }}>
+        {pool.days.map((poolDay) => (
+          <PoolDayColumn 
+            key={poolDay.id} 
+            poolId={pool.id}
+            day={poolDay.day}
+          />
+        ))}
+      </div>
     </div>
   );
 };
@@ -67,9 +90,9 @@ const PoolDayColumn = ({ poolId, day }: PoolDayColumnProps) => {
   return (
     <div 
       ref={setNodeRef}
-      className={`pool-day relative border-r last:border-r-0 w-48 min-w-48 ${isOver ? 'bg-gray-50' : ''}`}
+      className={`pool-day relative border-r last:border-r-0 h-full ${isOver ? 'bg-gray-50' : ''}`}
     >
-      <div className="pool-header sticky top-0 bg-gray-100 p-2 text-center font-medium">
+      <div className="pool-header sticky top-0 bg-gray-100 p-2 text-center font-medium border-b">
         {day}
       </div>
       <div className="relative h-full" style={{ minHeight: '900px'}} ref={blockAreaRef}>
