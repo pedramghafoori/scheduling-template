@@ -1,16 +1,24 @@
 import { useScheduleStore } from "@/stores/scheduleStore";
 import { useDragStore } from "@/stores/dragStore";
-import { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import { DragEndEvent, DragStartEvent, DraggableAttributes } from "@dnd-kit/core";
+import { DraggableSyntheticListeners } from '@dnd-kit/core';
 import HourLabels from "./HourLabels";
-import PoolCanvas from "./PoolCanvas";
+import PoolCanvas, { PoolCanvasProps } from "./PoolCanvas";
 import { DEFAULT_SESSION_DURATION } from "@/lib/constants";
 import { createDragImage } from "@/lib/utils";
 import { DayOfWeek, Pool } from "@/lib/types";
 import { clientYToMinutes } from "@/lib/position";
 import { DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import React from "react";
 
-const PoolWrapper = ({ pool, children }: { pool: Pool, children: React.ReactNode }) => {
+// Define props for the PoolWrapper children
+interface PoolWrapperChildProps {
+  dragAttributes?: DraggableAttributes;
+  dragListeners?: DraggableSyntheticListeners;
+}
+
+const PoolWrapper = ({ pool, children }: { pool: Pool, children: React.ReactElement<PoolCanvasProps & PoolWrapperChildProps> }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: pool.id,
     data: { type: "pool", pool }
@@ -27,14 +35,9 @@ const PoolWrapper = ({ pool, children }: { pool: Pool, children: React.ReactNode
       className="relative"
       style={style}
     >
-      <div 
-        className="absolute left-0 top-0 bottom-0 w-8 cursor-move bg-gray-100 border-r flex items-center justify-center"
-        {...attributes}
-        {...listeners}
-      >
-        ⋮⋮
-      </div>
-      {children}
+      {/* Removed handle div */}
+      {/* Pass drag props to children */}
+      {React.cloneElement(children, { dragAttributes: attributes, dragListeners: listeners })}
     </div>
   );
 };

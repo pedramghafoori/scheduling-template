@@ -4,23 +4,35 @@ import { Pool, DayOfWeek } from "@/lib/types";
 import { useScheduleStore } from "@/stores/scheduleStore";
 import { useDragStore } from "@/stores/dragStore";
 import CourseBlock from "./CourseBlock";
-import { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
+import { DragStartEvent, DragEndEvent, DraggableAttributes } from "@dnd-kit/core";
+import { DraggableSyntheticListeners } from '@dnd-kit/core';
 import HourLabels from "./HourLabels";
 
-interface PoolCanvasProps {
+export interface PoolCanvasProps {
   pool: Pool;
   onDragStart?: (event: DragStartEvent) => void;
   onDragEnd?: (event: DragEndEvent) => void;
+  dragAttributes?: DraggableAttributes;
+  dragListeners?: DraggableSyntheticListeners;
 }
 
-const PoolCanvas = ({ pool }: PoolCanvasProps) => {
+const PoolCanvas = ({ pool, dragAttributes, dragListeners }: PoolCanvasProps) => {
   const { dragSession } = useDragStore();
   const { removePool } = useScheduleStore();
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="bg-white border-b p-2 flex justify-between items-center pl-8">
-        <div className="flex items-center space-x-4 min-w-0">
+      <div className="bg-white border-b p-2 flex items-center space-x-2">
+        <div 
+          className="p-1 cursor-move"
+          {...dragAttributes} 
+          {...dragListeners}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-gray-700">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+        </div>
+        <div className="flex-1 flex items-center space-x-4 min-w-0">
           <div className="font-medium truncate">{pool.title}</div>
           <div className="text-sm text-gray-500 truncate">{pool.location}</div>
         </div>
