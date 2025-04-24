@@ -127,7 +127,7 @@ const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
           {...listeners}
           className={`course-block-body p-2 h-full flex flex-col ${
             isDragging ? "opacity-50" : ""
-          } cursor-pointer`}
+          } cursor-move`}
         >
           <div className="font-medium">{course.title}</div>
           {isGrid && session && (
@@ -138,8 +138,9 @@ const CourseBlock = forwardRef<HTMLDivElement, CourseBlockProps>(
         </div>
         {isGrid && session && (
           <div
-            className="absolute bottom-0 left-0 right-0 h-2 bg-black bg-opacity-20 cursor-ns-resize select-none"
+            className="absolute bottom-0 left-0 right-0 h-2 bg-black bg-opacity-20 cursor-ns-resize select-none hover:bg-opacity-30 transition-colors"
             onMouseDown={onResizeMouseDown}
+            style={{ pointerEvents: 'auto' }}
           />
         )}
         <div 

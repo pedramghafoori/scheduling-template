@@ -1,12 +1,23 @@
 import { create } from "zustand";
-import { DragSession, Session } from "@/lib/types";
+import { Session } from "@/lib/types";
 
 interface DragState {
-  dragSession: DragSession | null;
+  /** The session currently being dragged (null if none) */
+  dragSession: Session | null;
+
+  /** True while a drag operation is in progress */
   isDragging: boolean;
+
+  /** Current Y-position of the cursor inside the column (px) */
   pointerY: number | null;
-  setPointerY: (y: number) => void;
-  startDrag: (session: Session, offsetY: number) => void;
+
+  /** Begin dragging a session */
+  startDrag: (session: Session) => void;
+
+  /** Update the live pointer Y while dragging */
+  movePointer: (y: number) => void;
+
+  /** Finish the drag operation (drop or cancel) */
   endDrag: () => void;
 }
 
@@ -15,21 +26,22 @@ export const useDragStore = create<DragState>((set) => ({
   isDragging: false,
   pointerY: null,
 
-  startDrag: (session: Session, offsetY: number) => {
-    set({ 
-      dragSession: { session, offsetY },
-      pointerY: offsetY,
-      isDragging: true 
-    });
-  },
-
-  setPointerY: (y) => set((s) => ({ ...s, pointerY: y })),
-
-  endDrag: () => {
-    set({ 
-      dragSession: null,
+  startDrag: (session) =>
+    set({
+      dragSession: session,
+      isDragging: true,
       pointerY: null,
-      isDragging: false 
-    });
-  },
+    }),
+
+  movePointer: (y) =>
+    set({
+      pointerY: y,
+    }),
+
+  endDrag: () =>
+    set({
+      dragSession: null,
+      isDragging: false,
+      pointerY: null,
+    }),
 }));
